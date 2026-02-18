@@ -1,0 +1,16 @@
+{
+    "name": "purelyd-music",
+    "version": "1.0.0",
+    "description": "Purelyd Music App with Supabase Cloud Sync",
+    "main": "index.html",
+    "scripts": {
+        "start": "npx serve ."
+    },
+    "keywords": [
+        "music",
+        "pwa",
+        "supabase"
+    ],
+    "author": "",
+    "license": "ISC"
+}
