@@ -29,6 +29,7 @@ let pendingSongId = null;
 let editingSongId = null; // Track which song is being edited
 let isSelectMode = false;
 let selectedSongIds = [];
+let userWantsToPlay = false; // Persistent state for background bypass
 
 // DOM Elements
 const songGrid = document.getElementById('song-grid');
@@ -197,6 +198,7 @@ function onPlayerStateChange(event) {
         nextSong();
     } else if (event.data === YT.PlayerState.PLAYING) {
         isPlaying = true;
+        userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
@@ -206,7 +208,16 @@ function onPlayerStateChange(event) {
         isPlaying = false;
         playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "paused";
+            // Only tell MediaSession we are paused if the app is NOT hidden.
+            // If hidden, the pause is likely a background throttle - keep 'playing' 
+            // state in notification so user can Resume.
+            if (!document.hidden) {
+                navigator.mediaSession.playbackState = "paused";
+                userWantsToPlay = false;
+            } else {
+                // Background pause: stay in 'playing' state to keep notification alive
+                navigator.mediaSession.playbackState = "playing";
+            }
         }
     }
 }
@@ -1081,14 +1092,14 @@ function playSong(index) {
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
             ytPlayer.loadVideoById(videoId);
-            setTimeout(() => {
-                ytPlayer.playVideo();
-                isPlaying = true;
-                playPauseBtn.textContent = '⏸';
-            }, 500);
+            userWantsToPlay = true;
+            isPlaying = true;
+            playPauseBtn.textContent = '⏸';
+            startKeepAlive();
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
+            userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
         }
@@ -1099,8 +1110,10 @@ function playSong(index) {
             setStatus("AUDIO ERROR");
             console.error("Playback error:", e);
         });
+        userWantsToPlay = true;
         isPlaying = true;
         playPauseBtn.textContent = '⏸';
+        startKeepAlive();
     }
 
     updateMediaSession(song);
@@ -1161,20 +1174,26 @@ function updateMediaSessionPositionState() {
         const song = songs[currentSongIndex];
         if (!song) return;
 
-        let duration, currentTime;
+        let duration = 0;
+        let currentTime = 0;
+        let rate = 1;
+
         if (song.type === 'youtube' && ytReady && ytPlayer.getDuration) {
             duration = ytPlayer.getDuration();
             currentTime = ytPlayer.getCurrentTime();
+            // Use actual playback rate if available
+            try { rate = ytPlayer.getPlaybackRate() || 1; } catch (e) { }
         } else if (song.type === 'audio') {
             duration = audioElement.duration;
             currentTime = audioElement.currentTime;
+            rate = audioElement.playbackRate || 1;
         }
 
-        if (duration && !isNaN(duration) && !isNaN(currentTime)) {
+        if (duration && !isNaN(duration) && duration > 0 && !isNaN(currentTime)) {
             try {
                 navigator.mediaSession.setPositionState({
                     duration: duration,
-                    playbackRate: audioElement.playbackRate || 1,
+                    playbackRate: isPlaying ? rate : 0,
                     position: Math.min(currentTime, duration)
                 });
             } catch (e) {
@@ -1213,6 +1232,7 @@ function startKeepAlive() {
         if (silentAudio.src !== SILENT_TRACK) {
             silentAudio.src = SILENT_TRACK;
             silentAudio.loop = true;
+            silentAudio.volume = 0.001; // Not muted, but nearly inaudible
         }
         silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
     }
@@ -1229,11 +1249,18 @@ document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
         // Refresh UI immediately when returning
         updateProgress();
+
+        // Resume YouTube if user wanted it to play but system paused it
+        if (userWantsToPlay && !isPlaying) {
+            const song = songs[currentSongIndex];
+            if (song && song.type === 'youtube' && ytReady) {
+                ytPlayer.playVideo();
+            }
+        }
     }
 
-    // If we are playing YouTube, the browser might pause it. 
-    // We keep the silent audio playing to maintain the MediaSession notification.
-    if (document.hidden && isPlaying) {
+    // For background bypass: keep silent audio playing if user wants playback
+    if (document.hidden && userWantsToPlay) {
         startKeepAlive();
     }
 });
@@ -1244,31 +1271,35 @@ function togglePlay() {
         const state = ytPlayer.getPlayerState();
         if (state === YT.PlayerState.PLAYING) {
             ytPlayer.pauseVideo();
-            playPauseBtn.textContent = '▶';
+            userWantsToPlay = false;
             isPlaying = false;
+            playPauseBtn.textContent = '▶';
             stopKeepAlive();
         } else {
             ytPlayer.playVideo();
-            playPauseBtn.textContent = '⏸';
+            userWantsToPlay = true;
             isPlaying = true;
+            playPauseBtn.textContent = '⏸';
             startKeepAlive();
         }
     } else {
         if (audioElement.paused) {
             audioElement.play();
-            playPauseBtn.textContent = '⏸';
+            userWantsToPlay = true;
             isPlaying = true;
+            playPauseBtn.textContent = '⏸';
             startKeepAlive();
         } else {
             audioElement.pause();
-            playPauseBtn.textContent = '▶';
+            userWantsToPlay = false;
             isPlaying = false;
+            playPauseBtn.textContent = '▶';
             stopKeepAlive();
         }
     }
 
     if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+        navigator.mediaSession.playbackState = userWantsToPlay ? "playing" : "paused";
         updateMediaSessionPositionState();
     }
 }
@@ -1293,9 +1324,9 @@ function updateProgress() {
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
 
-        // Update MediaSession Position State every 5 seconds or on major changes
-        // to reduce overhead while keeping it accurate
-        if (Math.floor(current) % 5 === 0) {
+        // Hyper-Sync: Update MediaSession Position State EVERY SECOND for YouTube links
+        // This ensures the lock screen progress bar is perfectly aligned.
+        if (isPlaying && (song.type === 'youtube' || Math.floor(current) % 5 === 0)) {
             updateMediaSessionPositionState();
         }
     }
