@@ -1103,20 +1103,119 @@ function updateMediaSession(song) {
             ]
         });
 
-        navigator.mediaSession.setActionHandler('play', () => {
-            if (!isPlaying) togglePlay();
-        });
-        navigator.mediaSession.setActionHandler('pause', () => {
-            if (isPlaying) togglePlay();
-        });
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
-            prevSong();
-        });
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
-            nextSong();
-        });
+        // Basic State
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+
+        // Action Handlers
+        const handlers = {
+            'play': () => { if (!isPlaying) togglePlay(); },
+            'pause': () => { if (isPlaying) togglePlay(); },
+            'previoustrack': () => prevSong(),
+            'nexttrack': () => nextSong(),
+            'seekbackward': (details) => {
+                const skipTime = details.seekOffset || 10;
+                seekRelative(-skipTime);
+            },
+            'seekforward': (details) => {
+                const skipTime = details.seekOffset || 10;
+                seekRelative(skipTime);
+            },
+            'seekto': (details) => {
+                if (details.fastSeek && 'fastSeek' in audioElement && song.type === 'audio') {
+                    audioElement.fastSeek(details.seekTime);
+                } else {
+                    seekToTime(details.seekTime);
+                }
+            }
+        };
+
+        for (const [action, handler] of Object.entries(handlers)) {
+            try {
+                navigator.mediaSession.setActionHandler(action, handler);
+            } catch (error) {
+                console.warn(`The media session action "${action}" is not supported yet.`);
+            }
+        }
+
+        // Initial position state
+        updateMediaSessionPositionState();
     }
 }
+
+function updateMediaSessionPositionState() {
+    if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+        const song = songs[currentSongIndex];
+        if (!song) return;
+
+        let duration, currentTime;
+        if (song.type === 'youtube' && ytReady && ytPlayer.getDuration) {
+            duration = ytPlayer.getDuration();
+            currentTime = ytPlayer.getCurrentTime();
+        } else if (song.type === 'audio') {
+            duration = audioElement.duration;
+            currentTime = audioElement.currentTime;
+        }
+
+        if (duration && !isNaN(duration) && !isNaN(currentTime)) {
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: duration,
+                    playbackRate: audioElement.playbackRate || 1,
+                    position: Math.min(currentTime, duration)
+                });
+            } catch (e) {
+                console.warn("Error updating position state:", e);
+            }
+        }
+    }
+}
+
+function seekRelative(offset) {
+    const song = songs[currentSongIndex];
+    if (song.type === 'youtube' && ytReady) {
+        ytPlayer.seekTo(ytPlayer.getCurrentTime() + offset, true);
+    } else {
+        audioElement.currentTime += offset;
+    }
+    updateMediaSessionPositionState();
+}
+
+function seekToTime(time) {
+    const song = songs[currentSongIndex];
+    if (song.type === 'youtube' && ytReady) {
+        ytPlayer.seekTo(time, true);
+    } else {
+        audioElement.currentTime = time;
+    }
+    updateMediaSessionPositionState();
+}
+
+updateMediaSessionPositionState();
+}
+
+// Background Keep-Alive Logic
+const silentAudio = document.getElementById('silent-audio');
+const SILENT_TRACK = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+
+function startKeepAlive() {
+    if (silentAudio) {
+        silentAudio.src = SILENT_TRACK;
+        silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
+    }
+}
+
+function stopKeepAlive() {
+    if (silentAudio) {
+        silentAudio.pause();
+    }
+}
+
+// Ensure silence plays whenever music starts to tell the OS we are active
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden && isPlaying) {
+        startKeepAlive();
+    }
+});
 
 function togglePlay() {
     const song = songs[currentSongIndex];
@@ -1126,21 +1225,30 @@ function togglePlay() {
             ytPlayer.pauseVideo();
             playPauseBtn.textContent = '▶';
             isPlaying = false;
+            stopKeepAlive();
         } else {
             ytPlayer.playVideo();
             playPauseBtn.textContent = '⏸';
             isPlaying = true;
+            startKeepAlive();
         }
     } else {
         if (audioElement.paused) {
             audioElement.play();
             playPauseBtn.textContent = '⏸';
             isPlaying = true;
+            startKeepAlive();
         } else {
             audioElement.pause();
             playPauseBtn.textContent = '▶';
             isPlaying = false;
+            stopKeepAlive();
         }
+    }
+
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+        updateMediaSessionPositionState();
     }
 }
 
@@ -1163,6 +1271,12 @@ function updateProgress() {
         progressBar.value = progress;
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
+
+        // Update MediaSession Position State every 5 seconds or on major changes
+        // to reduce overhead while keeping it accurate
+        if (Math.floor(current) % 5 === 0) {
+            updateMediaSessionPositionState();
+        }
     }
 }
 
