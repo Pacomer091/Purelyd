@@ -1,107 +1,51 @@
-const DB_NAME = 'purelyd_db';
-const DB_VERSION = 2; // Incremented for playlists
+const SUPABASE_URL = 'https://rniicbymwbmdzudichhm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_rqMSy5xGulCdFrXG7266nA_m8x4DYqP';
 
-let db;
-
-function openDB() {
-    return new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-        request.onupgradeneeded = (event) => {
-            const db = event.target.result;
-
-            // Songs Store
-            if (!db.objectStoreNames.contains('songs')) {
-                db.createObjectStore('songs', { keyPath: 'id' });
-            }
-
-            // Users Store
-            if (!db.objectStoreNames.contains('users')) {
-                db.createObjectStore('users', { keyPath: 'username' });
-            }
-
-            // Playlists Store
-            if (!db.objectStoreNames.contains('playlists')) {
-                db.createObjectStore('playlists', { keyPath: 'id', autoIncrement: true });
-            }
-
-            console.log("Database stores created/updated");
-        };
-
-        request.onsuccess = (event) => {
-            db = event.target.result;
-            resolve(db);
-        };
-
-        request.onerror = (event) => {
-            reject("Database error: " + event.target.errorCode);
-        };
-    });
-}
+// Use a distinct name for the client to avoid conflict with the global 'supabase' library object
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // User Operations
 const UserDB = {
     async addUser(user) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['users'], 'readwrite');
-            const store = transaction.objectStore('users');
-            const request = store.add(user);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
+        const { error } = await supabaseClient.from('users').insert([user]);
+        if (error) throw error;
+        return true;
     },
 
     async getUser(username) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['users'], 'readonly');
-            const store = transaction.objectStore('users');
-            const request = store.get(username);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        const { data, error } = await supabaseClient.from('users').select('*').eq('username', username).single();
+        if (error && error.code !== 'PGRST116') throw error; // PGRST116 is 'no rows found'
+        return data;
     },
 
     async getAllUsers() {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['users'], 'readonly');
-            const store = transaction.objectStore('users');
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        const { data, error } = await supabaseClient.from('users').select('*');
+        if (error) throw error;
+        return data;
     },
 
     async updateUser(user) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['users'], 'readwrite');
-            const store = transaction.objectStore('users');
-            const request = store.put(user);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
+        const { error } = await supabaseClient.from('users').update(user).eq('username', user.username);
+        if (error) throw error;
+        return true;
     },
 
     async toggleFavorite(username, songId) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const user = await this.getUser(username);
-                if (!user) return reject("User not found");
+        const user = await this.getUser(username);
+        if (!user) throw new Error("User not found");
 
-                if (!user.favorites) user.favorites = [];
-                const index = user.favorites.indexOf(songId);
+        let favorites = user.favorites || [];
+        const index = favorites.indexOf(songId);
 
-                if (index === -1) {
-                    user.favorites.push(songId);
-                } else {
-                    user.favorites.splice(index, 1);
-                }
+        if (index === -1) {
+            favorites.push(songId);
+        } else {
+            favorites.splice(index, 1);
+        }
 
-                await this.updateUser(user);
-                resolve(user.favorites);
-            } catch (e) {
-                reject(e);
-            }
-        });
+        const { error } = await supabaseClient.from('users').update({ favorites }).eq('username', username);
+        if (error) throw error;
+        return favorites;
     }
 };
 
@@ -109,149 +53,92 @@ const UserDB = {
 const SongDB = {
     async addSong(song, username) {
         const songWithUser = { ...song, username };
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['songs'], 'readwrite');
-            const store = transaction.objectStore('songs');
-            const request = store.put(songWithUser);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
+        const { error } = await supabaseClient.from('songs').upsert([songWithUser]);
+        if (error) throw error;
+        return true;
     },
 
     async getSongsByUser(username) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['songs'], 'readonly');
-            const store = transaction.objectStore('songs');
-            const request = store.getAll();
-            request.onsuccess = () => {
-                const allSongs = request.result;
-                const userSongs = allSongs.filter(s => s.username === username);
-                resolve(userSongs);
-            };
-            request.onerror = () => reject(request.error);
-        });
+        const { data, error } = await supabaseClient.from('songs').select('*').eq('username', username);
+        if (error) throw error;
+        return data;
     },
 
     async getAllSongs() {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['songs'], 'readonly');
-            const store = transaction.objectStore('songs');
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        const { data, error } = await supabaseClient.from('songs').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        return data;
     },
 
     async deleteSong(id) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['songs'], 'readwrite');
-            const store = transaction.objectStore('songs');
-            const request = store.delete(id);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
+        const { error } = await supabaseClient.from('songs').delete().eq('id', id);
+        if (error) throw error;
+        return true;
     },
 
     async updateSong(song) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['songs'], 'readwrite');
-            const store = transaction.objectStore('songs');
-            const request = store.put(song);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
+        const { error } = await supabaseClient.from('songs').update(song).eq('id', song.id);
+        if (error) throw error;
+        return true;
     }
 };
 
 // Playlist Operations
 const PlaylistDB = {
     async addPlaylist(playlist) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists'], 'readwrite');
-            const store = transaction.objectStore('playlists');
-            const request = store.add(playlist);
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
+        const { data, error } = await supabaseClient.from('playlists').insert([playlist]).select().single();
+        if (error) throw error;
+        return data.id;
     },
 
     async getPlaylistsByUser(username) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists'], 'readonly');
-            const store = transaction.objectStore('playlists');
-            const request = store.getAll();
-            request.onsuccess = () => {
-                const results = request.result.filter(p => p.username === username);
-                resolve(results);
-            };
-            request.onerror = () => reject(request.error);
-        });
+        const { data, error } = await supabaseClient.from('playlists').select('*').eq('username', username);
+        if (error) throw error;
+        return data;
     },
 
     async addSongToPlaylist(playlistId, songId) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists'], 'readwrite');
-            const store = transaction.objectStore('playlists');
-            const getReq = store.get(playlistId);
+        const { data: p, error: getErr } = await supabaseClient.from('playlists').select('song_ids').eq('id', playlistId).single();
+        if (getErr) throw getErr;
 
-            getReq.onsuccess = () => {
-                const playlist = getReq.result;
-                if (!playlist.songIds) playlist.songIds = [];
-                if (!playlist.songIds.includes(songId)) {
-                    playlist.songIds.push(songId);
-                    store.put(playlist).onsuccess = () => resolve(true);
-                } else {
-                    resolve(true); // Already in
-                }
-            };
-            getReq.onerror = () => reject(getReq.error);
-        });
+        let songIds = p.song_ids || [];
+        if (!songIds.includes(songId)) {
+            songIds.push(songId);
+            const { error } = await supabaseClient.from('playlists').update({ song_ids: songIds }).eq('id', playlistId);
+            if (error) throw error;
+        }
+        return true;
     },
 
     async removeSongFromPlaylist(playlistId, songId) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists'], 'readwrite');
-            const store = transaction.objectStore('playlists');
-            const getReq = store.get(playlistId);
+        const { data: p, error: getErr } = await supabaseClient.from('playlists').select('song_ids').eq('id', playlistId).single();
+        if (getErr) throw getErr;
 
-            getReq.onsuccess = () => {
-                const playlist = getReq.result;
-                playlist.songIds = playlist.songIds.filter(id => id !== songId);
-                store.put(playlist).onsuccess = () => resolve(true);
-            };
-            getReq.onerror = () => reject(getReq.error);
-        });
+        let songIds = (p.song_ids || []).filter(id => id !== songId);
+        const { error } = await supabaseClient.from('playlists').update({ song_ids: songIds }).eq('id', playlistId);
+        if (error) throw error;
+        return true;
     },
 
     async getPlaylistSongs(playlistId) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists', 'songs'], 'readonly');
-            const pStore = transaction.objectStore('playlists');
-            const sStore = transaction.objectStore('songs');
+        const { data: p, error: getErr } = await supabaseClient.from('playlists').select('song_ids').eq('id', playlistId).single();
+        if (getErr) throw getErr;
 
-            const pReq = pStore.get(playlistId);
-            pReq.onsuccess = () => {
-                const p = pReq.result;
-                if (!p || !p.songIds) return resolve([]);
+        if (!p || !p.song_ids || p.song_ids.length === 0) return [];
 
-                const sReq = sStore.getAll();
-                sReq.onsuccess = () => {
-                    const allSongs = sReq.result;
-                    const pSongs = allSongs.filter(s => p.songIds.includes(s.id));
-                    resolve(pSongs);
-                };
-            };
-            pReq.onerror = () => reject(pReq.error);
-        });
+        const { data: songs, error: sErr } = await supabaseClient.from('songs').select('*').in('id', p.song_ids);
+        if (sErr) throw sErr;
+        return songs;
     },
 
     async deletePlaylist(id) {
-        return new Promise((resolve, reject) => {
-            const transaction = db.transaction(['playlists'], 'readwrite');
-            const store = transaction.objectStore('playlists');
-            const request = store.delete(id);
-            request.onsuccess = () => resolve(true);
-            request.onerror = () => reject(request.error);
-        });
+        const { error } = await supabaseClient.from('playlists').delete().eq('id', id);
+        if (error) throw error;
+        return true;
     }
 };
+
+// Compatibility shim for older init code
+function openDB() {
+    return Promise.resolve(true);
+}
