@@ -1187,10 +1187,6 @@ function seekToTime(time) {
     } else {
         audioElement.currentTime = time;
     }
-    updateMediaSessionPositionState();
-}
-
-updateMediaSessionPositionState();
 }
 
 // Background Keep-Alive Logic
