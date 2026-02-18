@@ -212,13 +212,15 @@ function prevSong() {
 async function init() {
     console.log("Initializing application...");
 
-    // 1. Mandatory UI Setup (must happen even if cloud fails)
+    // 1. Load session first
+    currentUser = JSON.parse(localStorage.getItem('purelyd-current-user'));
+
+    // 2. Mandatory UI Setup
     setupEventListeners();
     updateAuthUI();
 
     try {
         console.log("Connecting to Supabase Cloud...");
-        currentUser = JSON.parse(localStorage.getItem('purelyd-current-user'));
 
         // Refresh users from cloud
         users = await UserDB.getAllUsers();

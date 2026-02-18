@@ -730,19 +730,49 @@ button[type="submit"]:hover {
     }
 
     .top-bar {
-        padding: 15px;
-        gap: 10px;
+        padding: 12px 16px;
+        gap: 12px;
         position: sticky;
         top: 0;
-        background: rgba(0, 0, 0, 0.8);
-        backdrop-filter: blur(10px);
+        background: rgba(0, 0, 0, 0.9);
+        backdrop-filter: blur(15px);
         z-index: 1000;
         border-bottom: 1px solid var(--border-color);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
     }
 
     .search-container {
-        max-width: none;
-        flex: 1;
+        width: 100%;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-container input {
+        width: 100% !important;
+        margin: 0;
+        padding: 10px 16px;
+        font-size: 14px;
+        border-radius: 12px;
+    }
+
+    .user-profile {
+        padding: 6px 10px;
+        gap: 8px;
+        background: var(--card-hover);
+        border-radius: 12px;
+    }
+
+    #login-status-text {
+        display: none;
+        /* Hide text on mobile to save space */
+    }
+
+    .avatar {
+        width: 24px;
+        height: 24px;
+        font-size: 10px;
     }
 
     .logo-text {
@@ -895,8 +925,8 @@ button[type="submit"]:hover {
         /* Hide times for cleaner mobile UI */
     }
 
-    .volume-control {
-        display: none;
+    .player-extra {
+        display: none !important;
         /* Hide volume on mobile to save space (system controls used instead) */
     }
 
