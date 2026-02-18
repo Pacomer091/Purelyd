@@ -210,44 +210,83 @@ function prevSong() {
 
 // Initialize
 async function init() {
-    console.log("Initializing application with Supabase Cloud...");
-    try {
-        // Compatibility check for migration
-        const migrationDone = localStorage.getItem('purelyd-cloud-migrated');
-        if (!migrationDone) {
-            console.log("Cloud migration pending...");
-            // We'll show a button or notification if we detect old data
-            // but for now, let's just mark it done to prevent loops
-            // unless we actually detect IndexedDB data later.
-        }
+    console.log("Initializing application...");
 
+    // 1. Mandatory UI Setup (must happen even if cloud fails)
+    setupEventListeners();
+    updateAuthUI();
+
+    try {
+        console.log("Connecting to Supabase Cloud...");
         currentUser = JSON.parse(localStorage.getItem('purelyd-current-user'));
 
         // Refresh users from cloud
         users = await UserDB.getAllUsers();
+        console.log("Cloud users loaded.");
 
-        // Update UI
-        updateAuthUI();
         await loadUserSongs();
         await loadPlaylists();
+
         renderPlaylists();
         renderSongs();
-        setupEventListeners();
 
-        console.log("Init complete.");
+        console.log("Cloud data synchronized.");
     } catch (e) {
-        console.error("CRITICAL INIT ERROR:", e);
-        // Silently fail or show a non-intrusive warning
+        console.warn("CLOUD SYNC FAILED (showing default songs):", e);
+        // Fallback to defaults
+        songs = [...DEFAULT_SONGS];
+        renderSongs();
     }
+    console.log("Init complete.");
 }
 
 // Utility to migrate local data to cloud
 async function migrateToCloud() {
     console.log("Starting cloud migration...");
-    // This is a manual trigger function for the user
-    // It requires the OLD db.js logic which is now overwritten.
-    // If you need to migrate, we would have to temporarily restore IndexedDB.
-    alert("Si tienes datos locales que quieras subir, dímelo y prepararé un script de migración temporal.");
+    const DB_NAME = 'purelyd_db';
+    const DB_VERSION = 2;
+
+    const openOldDB = () => {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(DB_NAME, DB_VERSION);
+            request.onsuccess = (e) => resolve(e.target.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    };
+
+    try {
+        const oldDb = await openOldDB();
+        const transaction = oldDb.transaction(['songs'], 'readonly');
+        const store = transaction.objectStore('songs');
+        const request = store.getAll();
+
+        request.onsuccess = async () => {
+            const oldSongs = request.result;
+            if (oldSongs.length === 0) {
+                alert("No se encontraron canciones locales para migrar.");
+                return;
+            }
+
+            console.log(`Migrando ${oldSongs.length} canciones...`);
+            let count = 0;
+            for (const song of oldSongs) {
+                try {
+                    // Upload to Supabase using our new SongDB
+                    await SongDB.addSong(song, song.username || 'invitado');
+                    count++;
+                } catch (err) {
+                    console.error("Error migrando canción:", song.title, err);
+                }
+            }
+
+            localStorage.setItem('purelyd-cloud-migrated', 'true');
+            alert(`¡Migración completada! Se han subido ${count} canciones a la nube.`);
+            window.location.reload(); // Reload to show new data
+        };
+    } catch (e) {
+        console.error("Error abriendo la base de datos antigua:", e);
+        alert("No se pudo acceder a los datos locales antiguos.");
+    }
 }
 
 async function migrateData() {
