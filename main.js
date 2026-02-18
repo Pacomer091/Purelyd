@@ -1136,70 +1136,85 @@ function playSong(index) {
 }
 
 function updateMediaSession(song) {
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = new MediaMetadata({
-            title: song.title,
-            artist: song.artist,
-            album: 'Purelyd Music',
-            artwork: [
-                { src: song.cover || getThumbnail(song), sizes: '512x512', type: 'image/png' }
-            ]
-        });
+    if (!('mediaSession' in navigator)) return;
 
-        // Basic State
-        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: song.title,
+        artist: song.artist,
+        album: 'Purelyd Music',
+        artwork: [
+            { src: song.cover || getThumbnail(song), sizes: '512x512', type: 'image/png' }
+        ]
+    });
 
-        // Action Handlers
-        const handlers = {
-            'play': () => {
-                // Hardware-Direct Play
-                userWantsToPlay = true;
-                startKeepAlive();
-                if (song.type === 'youtube' && ytReady) {
-                    ytPlayer.playVideo();
-                } else if (song.type === 'audio') {
-                    audioElement.play();
-                }
-            },
-            'pause': () => {
-                // Hardware-Direct Pause
-                userWantsToPlay = false;
-                if (song.type === 'youtube' && ytReady) {
-                    ytPlayer.pauseVideo();
-                } else if (song.type === 'audio') {
-                    audioElement.pause();
-                }
-            },
-            'previoustrack': () => prevSong(),
-            'nexttrack': () => nextSong(),
-            'seekbackward': (details) => {
-                const skipTime = details.seekOffset || 10;
-                seekRelative(-skipTime);
-            },
-            'seekforward': (details) => {
-                const skipTime = details.seekOffset || 10;
-                seekRelative(skipTime);
-            },
-            'seekto': (details) => {
-                if (details.fastSeek && 'fastSeek' in audioElement && song.type === 'audio') {
-                    audioElement.fastSeek(details.seekTime);
-                } else {
-                    seekToTime(details.seekTime);
-                }
+    // Basic State
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    updateMediaSessionPositionState();
+}
+
+function initMediaSessionHandlers() {
+    if (!('mediaSession' in navigator)) return;
+
+    const handlers = {
+        'play': () => {
+            // Hardware-Direct Play
+            userWantsToPlay = true;
+            startKeepAlive();
+            const song = songs[currentSongIndex];
+            if (!song) return;
+            if (song.type === 'youtube' && ytReady) {
+                ytPlayer.playVideo();
+            } else if (song.type === 'audio') {
+                audioElement.play();
             }
-        };
-
-        for (const [action, handler] of Object.entries(handlers)) {
-            try {
-                navigator.mediaSession.setActionHandler(action, handler);
-            } catch (error) {
-                console.warn(`The media session action "${action}" is not supported yet.`);
+        },
+        'pause': () => {
+            // Hardware-Direct Pause
+            userWantsToPlay = false;
+            const song = songs[currentSongIndex];
+            if (!song) return;
+            if (song.type === 'youtube' && ytReady) {
+                ytPlayer.pauseVideo();
+            } else if (song.type === 'audio') {
+                audioElement.pause();
+            }
+        },
+        'previoustrack': () => prevSong(),
+        'nexttrack': () => nextSong(),
+        'seekbackward': (details) => {
+            const skipTime = details.seekOffset || 10;
+            seekRelative(-skipTime);
+        },
+        'seekforward': (details) => {
+            const skipTime = details.seekOffset || 10;
+            seekRelative(skipTime);
+        },
+        'seekto': (details) => {
+            const song = songs[currentSongIndex];
+            if (!song) return;
+            if (details.fastSeek && 'fastSeek' in audioElement && song.type === 'audio') {
+                audioElement.fastSeek(details.seekTime);
+            } else {
+                seekToTime(details.seekTime);
             }
         }
+    };
 
-        // Initial position state
-        updateMediaSessionPositionState();
+    for (const [action, handler] of Object.entries(handlers)) {
+        try {
+            navigator.mediaSession.setActionHandler(action, handler);
+        } catch (error) {
+            console.warn(`The media session action "${action}" is not supported yet.`);
+        }
     }
+
+    // Set initial placeholder metadata to "warm up" the slot
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Purelyd',
+        artist: 'Ready to play',
+        album: 'Purelyd Music',
+        artwork: [{ src: 'favicon.ico', sizes: '512x512', type: 'image/x-icon' }]
+    });
 }
 
 function updateMediaSessionPositionState() {
@@ -1276,10 +1291,12 @@ function startKeepAlive() {
 // This makes the app an "active audio process" immediately.
 document.addEventListener('click', () => {
     startKeepAlive();
+    initMediaSessionHandlers();
 }, { once: true });
 
 document.addEventListener('touchstart', () => {
     startKeepAlive();
+    initMediaSessionHandlers();
 }, { once: true });
 
 function stopKeepAlive() {
