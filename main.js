@@ -204,15 +204,15 @@ function onPlayerStateChange(event) {
             navigator.mediaSession.playbackState = "playing";
             updateMediaSessionPositionState();
         }
+        startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
         isPlaying = false;
         playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
-            // Truth-based sync: tell the OS we are paused.
-            // This stops the progress bar from moving incorrectly.
             navigator.mediaSession.playbackState = "paused";
             updateMediaSessionPositionState();
         }
+        stopKeepAlive();
     }
 }
 
@@ -1050,6 +1050,28 @@ function setupEventListeners() {
 
     // Start UI update loop for YouTube
     setInterval(updateProgress, 1000);
+
+    // Unify state management for native audio element
+    audioElement.onplay = () => {
+        isPlaying = true;
+        userWantsToPlay = true;
+        playPauseBtn.textContent = '⏸';
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "playing";
+            updateMediaSessionPositionState();
+        }
+        startKeepAlive();
+    };
+
+    audioElement.onpause = () => {
+        isPlaying = false;
+        playPauseBtn.textContent = '▶';
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "paused";
+            updateMediaSessionPositionState();
+        }
+        stopKeepAlive();
+    };
 }
 
 // Utility to export all songs for GitHub deployment
@@ -1130,14 +1152,23 @@ function updateMediaSession(song) {
         // Action Handlers
         const handlers = {
             'play': () => {
-                // OS-Blessed Gesture: Use this to resume YT in background
+                // Hardware-Direct Play
                 userWantsToPlay = true;
                 startKeepAlive();
-                if (!isPlaying) togglePlay();
+                if (song.type === 'youtube' && ytReady) {
+                    ytPlayer.playVideo();
+                } else if (song.type === 'audio') {
+                    audioElement.play();
+                }
             },
             'pause': () => {
+                // Hardware-Direct Pause
                 userWantsToPlay = false;
-                if (isPlaying) togglePlay();
+                if (song.type === 'youtube' && ytReady) {
+                    ytPlayer.pauseVideo();
+                } else if (song.type === 'audio') {
+                    audioElement.pause();
+                }
             },
             'previoustrack': () => prevSong(),
             'nexttrack': () => nextSong(),
@@ -1286,38 +1317,18 @@ function togglePlay() {
         if (state === YT.PlayerState.PLAYING) {
             ytPlayer.pauseVideo();
             userWantsToPlay = false;
-            isPlaying = false;
-            playPauseBtn.textContent = '▶';
-            stopKeepAlive();
         } else {
             ytPlayer.playVideo();
             userWantsToPlay = true;
-            isPlaying = true;
-            playPauseBtn.textContent = '⏸';
-            startKeepAlive();
         }
     } else {
         if (audioElement.paused) {
             audioElement.play();
             userWantsToPlay = true;
-            isPlaying = true;
-            playPauseBtn.textContent = '⏸';
-            startKeepAlive();
         } else {
             audioElement.pause();
             userWantsToPlay = false;
-            isPlaying = false;
-            playPauseBtn.textContent = '▶';
-            stopKeepAlive();
         }
-    }
-
-    if ('mediaSession' in navigator) {
-        // userWantsToPlay reflects our INTENT. 
-        // We set playbackState based on current reality, 
-        // but user can hit Play on lock screen to set reality = intent.
-        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
-        updateMediaSessionPositionState();
     }
 }
 
