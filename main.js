@@ -1234,9 +1234,20 @@ function startKeepAlive() {
             silentAudio.loop = true;
             silentAudio.volume = 0.001; // Not muted, but nearly inaudible
         }
+        // Always try to play, even if already playing (no-op)
         silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
     }
 }
+
+// Global Interaction Unlock: "Warm up" the audio context on first click
+// This makes the app an "active audio process" immediately.
+document.addEventListener('click', () => {
+    startKeepAlive();
+}, { once: true });
+
+document.addEventListener('touchstart', () => {
+    startKeepAlive();
+}, { once: true });
 
 function stopKeepAlive() {
     if (silentAudio) {
@@ -1259,8 +1270,9 @@ document.addEventListener('visibilitychange', () => {
         }
     }
 
-    // For background bypass: keep silent audio playing if user wants playback
-    if (document.hidden && userWantsToPlay) {
+    // For background bypass: keep silent audio playing 
+    // We stay active even if YouTube pauses itself.
+    if (userWantsToPlay) {
         startKeepAlive();
     }
 });
