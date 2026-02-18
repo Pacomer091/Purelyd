@@ -201,9 +201,12 @@ function onPlayerStateChange(event) {
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "playing";
-            // Force metadata refresh exactly when state becomes PLAYING
-            updateMediaSession(songs[currentSongIndex]);
+            // Hardware Handshake: Rapid cycle to force OS privilege
+            navigator.mediaSession.playbackState = "paused";
+            setTimeout(() => {
+                navigator.mediaSession.playbackState = "playing";
+                updateMediaSession(songs[currentSongIndex]);
+            }, 50);
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1100,6 +1103,8 @@ function playSong(index) {
     document.querySelector('.player-cover').style.backgroundImage = `url(${cover})`;
     document.querySelector('.player-cover').style.backgroundSize = 'cover';
 
+    updateMediaSession(song);
+
     const videoId = getYTId(song.url);
     if (song.type === 'youtube' || videoId) {
         if (!videoId) {
@@ -1113,10 +1118,8 @@ function playSong(index) {
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
-            // Ghost Skip: Trigger micro-play/pause on silent track 
-            // to claim "System Gesture" privileges for the domain.
+            // Start silent anchor immediately
             startKeepAlive();
-            setTimeout(() => { if (isPlaying) startKeepAlive(); }, 500);
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
@@ -1136,8 +1139,6 @@ function playSong(index) {
         playPauseBtn.textContent = '⏸';
         startKeepAlive();
     }
-
-    updateMediaSession(song);
 }
 
 function updateMediaSession(song) {
@@ -1213,7 +1214,7 @@ function initMediaSessionHandlers() {
         }
     }
 
-    // Clear any generic placeholder metadata securely
+    // Unified Metadata Management: No placeholder to avoid sticky titles
     navigator.mediaSession.metadata = null;
 }
 
@@ -1280,7 +1281,7 @@ function startKeepAlive() {
         if (silentAudio.src !== SILENT_TRACK) {
             silentAudio.src = SILENT_TRACK;
             silentAudio.loop = true;
-            silentAudio.volume = 0.001; // Not muted, but nearly inaudible
+            silentAudio.volume = 0.01; // Boosted for better OS detection (still very low)
         }
         // Always try to play, even if already playing (no-op)
         silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
