@@ -16,6 +16,25 @@
 </head>
 
 <body class="dark-theme">
+    <div id="debug-log"
+        style="position:fixed;top:0;left:0;width:100%;background:rgba(0,0,0,0.9);color:#0f0;font-family:monospace;z-index:99999;max-height:200px;overflow-y:auto;font-size:12px;display:none;padding:10px;pointer-events:none;">
+    </div>
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            const log = document.getElementById('debug-log');
+            log.style.display = 'block';
+            log.innerHTML += '<div>ERROR: ' + msg + ' at ' + line + ':' + col + '</div>';
+            return false;
+        };
+        console.log = (function (oldLog) {
+            return function (...args) {
+                const log = document.getElementById('debug-log');
+                // log.style.display = 'block'; // Uncomment to see all logs
+                log.innerHTML += '<div>LOG: ' + args.join(' ') + '</div>';
+                oldLog.apply(console, args);
+            };
+        })(console.log);
+    </script>
     <div class="app-container">
         <div id="sidebar-overlay" class="sidebar-overlay"></div>
         <!-- Sidebar -->

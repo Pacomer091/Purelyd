@@ -919,9 +919,7 @@ function setupEventListeners() {
 
         currentUser.genres = selectedGenres;
         // Update user in DB
-        const transaction = db.transaction(['users'], 'readwrite');
-        const store = transaction.objectStore('users');
-        store.put(currentUser);
+        await UserDB.updateUser(currentUser);
 
         localStorage.setItem('purelyd-current-user', JSON.stringify(currentUser));
         genreModal.style.display = 'none';
