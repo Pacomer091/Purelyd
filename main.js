@@ -208,16 +208,10 @@ function onPlayerStateChange(event) {
         isPlaying = false;
         playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
-            // Only tell MediaSession we are paused if the app is NOT hidden.
-            // If hidden, the pause is likely a background throttle - keep 'playing' 
-            // state in notification so user can Resume.
-            if (!document.hidden) {
-                navigator.mediaSession.playbackState = "paused";
-                userWantsToPlay = false;
-            } else {
-                // Background pause: stay in 'playing' state to keep notification alive
-                navigator.mediaSession.playbackState = "playing";
-            }
+            // Truth-based sync: tell the OS we are paused.
+            // This stops the progress bar from moving incorrectly.
+            navigator.mediaSession.playbackState = "paused";
+            updateMediaSessionPositionState();
         }
     }
 }
@@ -1135,8 +1129,16 @@ function updateMediaSession(song) {
 
         // Action Handlers
         const handlers = {
-            'play': () => { if (!isPlaying) togglePlay(); },
-            'pause': () => { if (isPlaying) togglePlay(); },
+            'play': () => {
+                // OS-Blessed Gesture: Use this to resume YT in background
+                userWantsToPlay = true;
+                startKeepAlive();
+                if (!isPlaying) togglePlay();
+            },
+            'pause': () => {
+                userWantsToPlay = false;
+                if (isPlaying) togglePlay();
+            },
             'previoustrack': () => prevSong(),
             'nexttrack': () => nextSong(),
             'seekbackward': (details) => {
@@ -1311,7 +1313,10 @@ function togglePlay() {
     }
 
     if ('mediaSession' in navigator) {
-        navigator.mediaSession.playbackState = userWantsToPlay ? "playing" : "paused";
+        // userWantsToPlay reflects our INTENT. 
+        // We set playbackState based on current reality, 
+        // but user can hit Play on lock screen to set reality = intent.
+        navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
         updateMediaSessionPositionState();
     }
 }
