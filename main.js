@@ -195,6 +195,19 @@ function onPlayerStateChange(event) {
 
     if (event.data === YT.PlayerState.ENDED) {
         nextSong();
+    } else if (event.data === YT.PlayerState.PLAYING) {
+        isPlaying = true;
+        playPauseBtn.textContent = '⏸';
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "playing";
+            updateMediaSessionPositionState();
+        }
+    } else if (event.data === YT.PlayerState.PAUSED) {
+        isPlaying = false;
+        playPauseBtn.textContent = '▶';
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.playbackState = "paused";
+        }
     }
 }
 
@@ -983,6 +996,7 @@ function setupEventListeners() {
     };
 
     audioElement.ontimeupdate = updateProgress;
+    audioElement.onended = nextSong;
     audioElement.onloadedmetadata = () => {
         if (songs[currentSongIndex].type === 'audio') {
             totalTimeEl.textContent = formatTime(audioElement.duration);
@@ -1191,11 +1205,15 @@ function seekToTime(time) {
 
 // Background Keep-Alive Logic
 const silentAudio = document.getElementById('silent-audio');
+// Using a more robust 1-second silent track to avoid aggressive OS throttling
 const SILENT_TRACK = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
 
 function startKeepAlive() {
     if (silentAudio) {
-        silentAudio.src = SILENT_TRACK;
+        if (silentAudio.src !== SILENT_TRACK) {
+            silentAudio.src = SILENT_TRACK;
+            silentAudio.loop = true;
+        }
         silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
     }
 }
@@ -1208,6 +1226,13 @@ function stopKeepAlive() {
 
 // Ensure silence plays whenever music starts to tell the OS we are active
 document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+        // Refresh UI immediately when returning
+        updateProgress();
+    }
+
+    // If we are playing YouTube, the browser might pause it. 
+    // We keep the silent audio playing to maintain the MediaSession notification.
     if (document.hidden && isPlaying) {
         startKeepAlive();
     }
