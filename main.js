@@ -201,18 +201,15 @@ function onPlayerStateChange(event) {
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
-            // "The Ultimate Handshake" (Resilience 8.0)
-            // Rapid cycle mimics the manual "next/prev" gesture to grant OS privilege
+            // Resilience 9.0: Stabilization Delay
+            // Allow YouTube to report accurate time/duration before "locking in" trust
             navigator.mediaSession.playbackState = "playing";
             setTimeout(() => {
-                if (!userWantsToPlay) return;
-                navigator.mediaSession.playbackState = "paused";
-                setTimeout(() => {
-                    if (!userWantsToPlay) return;
-                    navigator.mediaSession.playbackState = "playing";
-                    updateMediaSession(songs[currentSongIndex]);
-                }, 200);
-            }, 200);
+                if (!userWantsToPlay || !isPlaying) return;
+                // Force a final authoritative metadata/position refresh
+                updateMediaSession(songs[currentSongIndex]);
+                updateMediaSessionPositionState();
+            }, 500);
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1248,12 +1245,12 @@ function updateMediaSessionPositionState() {
             rate = audioElement.playbackRate || 1;
         }
 
-        if (duration && !isNaN(duration) && duration > 0 && !isNaN(currentTime)) {
+        if (duration && !isNaN(duration) && isFinite(duration) && duration > 0 && !isNaN(currentTime) && isFinite(currentTime)) {
             try {
                 navigator.mediaSession.setPositionState({
                     duration: duration,
                     playbackRate: isPlaying ? rate : 0,
-                    position: Math.min(currentTime, duration)
+                    position: Math.min(Math.max(0, currentTime), duration)
                 });
             } catch (e) {
                 console.warn("Error updating position state:", e);
@@ -1380,9 +1377,12 @@ function updateProgress() {
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
 
-        // Hyper-Sync: Update MediaSession Position State EVERY SECOND for YouTube links
-        // This ensures the lock screen progress bar is perfectly aligned.
-        if (isPlaying && (song.type === 'youtube' || Math.floor(current) % 5 === 0)) {
+        // Resilience 9.0: Stable Progress Sync
+        // Update MediaSession Position State every 3 seconds to reduce jitter/CPU usage
+        // This makes the lock screen progress bar much smoother and more reliable.
+        if (isPlaying && (song.type === 'youtube' && Math.floor(current) % 3 === 0)) {
+            updateMediaSessionPositionState();
+        } else if (isPlaying && song.type === 'audio' && Math.floor(current) % 5 === 0) {
             updateMediaSessionPositionState();
         }
     }
