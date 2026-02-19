@@ -202,8 +202,7 @@ function onPlayerStateChange(event) {
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
-            // Force metadata refresh exactly when state becomes PLAYING
-            updateMediaSession(songs[currentSongIndex]);
+            updateMediaSessionPositionState();
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1097,11 +1096,8 @@ function playSong(index) {
     document.querySelector('.player-song-info .song-name').textContent = song.title;
     document.querySelector('.player-song-info .artist-name').textContent = song.artist;
     const cover = song.cover || getThumbnail(song);
-    const coverEl = document.querySelector('.player-cover');
-    if (coverEl) {
-        coverEl.style.backgroundImage = `url(${cover})`;
-        coverEl.style.backgroundSize = 'cover';
-    }
+    document.querySelector('.player-cover').style.backgroundImage = `url(${cover})`;
+    document.querySelector('.player-cover').style.backgroundSize = 'cover';
 
     const videoId = getYTId(song.url);
     if (song.type === 'youtube' || videoId) {
@@ -1111,12 +1107,11 @@ function playSong(index) {
         }
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
-            // Force hardware activation
+            ytPlayer.loadVideoById(videoId);
+            userWantsToPlay = true;
+            isPlaying = true;
             playPauseBtn.textContent = '⏸';
-            // Ghost Skip: Trigger micro-play/pause on silent track 
-            // to claim "System Gesture" privileges for the domain.
             startKeepAlive();
-            setTimeout(() => { if (isPlaying) startKeepAlive(); }, 500);
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
@@ -1213,8 +1208,13 @@ function initMediaSessionHandlers() {
         }
     }
 
-    // Unified Metadata Management: No placeholder to avoid sticky titles
-    navigator.mediaSession.metadata = null;
+    // Set initial placeholder metadata to "warm up" the slot
+    navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Purelyd',
+        artist: 'Ready to play',
+        album: 'Purelyd Music',
+        artwork: [{ src: 'favicon.ico', sizes: '512x512', type: 'image/x-icon' }]
+    });
 }
 
 function updateMediaSessionPositionState() {
@@ -1237,12 +1237,12 @@ function updateMediaSessionPositionState() {
             rate = audioElement.playbackRate || 1;
         }
 
-        if (duration && !isNaN(duration) && isFinite(duration) && duration > 0 && !isNaN(currentTime) && isFinite(currentTime)) {
+        if (duration && !isNaN(duration) && duration > 0 && !isNaN(currentTime)) {
             try {
                 navigator.mediaSession.setPositionState({
                     duration: duration,
                     playbackRate: isPlaying ? rate : 0,
-                    position: Math.min(Math.max(0, currentTime), duration)
+                    position: Math.min(currentTime, duration)
                 });
             } catch (e) {
                 console.warn("Error updating position state:", e);
