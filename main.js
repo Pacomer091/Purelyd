@@ -202,15 +202,12 @@ function onPlayerStateChange(event) {
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
-            // Resilience 9.0: Stabilization Delay
-            // Allow YouTube to report accurate time/duration before "locking in" trust
-            navigator.mediaSession.playbackState = "playing";
+            // Hardware Handshake (v7.0): Rapid cycle to force OS privilege
+            navigator.mediaSession.playbackState = "paused";
             setTimeout(() => {
-                if (!userWantsToPlay || !isPlaying) return;
-                // Force a final authoritative metadata/position refresh
+                navigator.mediaSession.playbackState = "playing";
                 updateMediaSession(songs[currentSongIndex]);
-                updateMediaSessionPositionState();
-            }, 500);
+            }, 50);
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1096,12 +1093,6 @@ function playSong(index) {
     const song = songs[index];
     if (!song) return;
 
-    // Resilience 10.0: Synchronous Gesture Blessing
-    // First interaction MUST play the silent anchor WITHOUT ANY ASYNC DELAY.
-    startKeepAlive();
-    initMediaSessionHandlers();
-    updateMediaSession(song);
-
     // Stop previous players
     audioElement.pause();
     if (ytReady && ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
@@ -1129,6 +1120,9 @@ function playSong(index) {
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
+            // Ghost Skip: Trigger micro-play/pause on silent track 
+            // to claim "System Gesture" privileges for the domain.
+            startKeepAlive();
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
@@ -1148,6 +1142,8 @@ function playSong(index) {
         playPauseBtn.textContent = '⏸';
         startKeepAlive();
     }
+
+    updateMediaSession(song);
 }
 
 function updateMediaSession(song) {
@@ -1379,15 +1375,9 @@ function updateProgress() {
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
 
-        // Resilience 10.0: Smooth & Stable Progress Sync
-        // Restore 1s frequency but only update OS if the second has actually changed.
-        const currentSec = Math.floor(current);
-        if (isPlaying && (song.type === 'youtube' || currentSec % 5 === 0)) {
-            // Jitter Guard: Only sync with OS if we haven't synced this specific second yet
-            if (this._lastSyncSec !== currentSec) {
-                updateMediaSessionPositionState();
-                this._lastSyncSec = currentSec;
-            }
+        // Restore v7.0 Progress Sync: Fluid second-by-second for YouTube
+        if (isPlaying && (song.type === 'youtube' || Math.floor(current) % 5 === 0)) {
+            updateMediaSessionPositionState();
         }
     }
 }
