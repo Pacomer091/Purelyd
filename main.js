@@ -140,7 +140,8 @@ window.onYouTubeIframeAPIReady = function () {
                 'modestbranding': 1,
                 'rel': 0,
                 'enablejsapi': 1,
-                'origin': window.location.origin || '*'
+                'origin': window.location.origin || '*',
+                'playsinline': 1
             },
             events: {
                 'onReady': onPlayerReady,
@@ -1108,12 +1109,12 @@ function playSong(index) {
         }
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
+            // Force hardware activation FIRST to capture user gesture
             ytPlayer.loadVideoById(videoId);
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
-            // Ghost Skip: Trigger micro-play/pause on silent track 
-            // to claim "System Gesture" privileges for the domain.
+            // Start silent anchor SECOND to maintain privileges
             startKeepAlive();
             setTimeout(() => { if (isPlaying) startKeepAlive(); }, 500);
         } else {
