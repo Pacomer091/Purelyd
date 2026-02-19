@@ -27,6 +27,7 @@ let ytPlayer;
 let ytReady = false;
 let pendingSongId = null;
 let audioContext = null; // Audio Focus Warming Context
+let lastProgressSyncSec = -1; // Global guard for MediaSession jitter
 let editingSongId = null; // Track which song is being edited
 let isSelectMode = false;
 let selectedSongIds = [];
@@ -1113,28 +1114,34 @@ function playSong(index) {
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
 
-            // Resilience 12.0: Audio Focus Handshake
-            // 1. Warm up web audio stack synchronously
+            // Resilience 13.0: Hard State Reset
+            // 1. Scrub previous state to prevent "Sticky Timestamp" bug
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = "none";
+                try {
+                    // Force a zero-state to bridge the gap
+                    navigator.mediaSession.setPositionState({
+                        duration: 120, // Dummy
+                        playbackRate: 0,
+                        position: 0
+                    });
+                } catch (e) { }
+            }
+            lastProgressSyncSec = -1;
+
+            // 2. Warm up web audio stack synchronously
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
             if (audioContext.state === 'suspended') audioContext.resume();
 
-            // 2. Warm up MediaSession to "Media" class
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: 'Loading...',
-                    artist: 'Purelyd',
-                    album: 'Streaming Music',
-                    artwork: [{ src: 'favicon.ico', sizes: '512x512', type: 'image/x-icon' }]
-                });
-            }
+            // 3. Warm up MediaSession with REAL metadata immediately
+            updateMediaSession(song);
+            navigator.mediaSession.playbackState = "playing";
 
-            // 3. Load YouTube (Primary Focus Hunter)
+            // 4. Load YouTube (Primary Focus Hunter)
             ytPlayer.loadVideoById(videoId);
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
-
-            // Note: startKeepAlive() deferred to onStateChange PLAYING
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
@@ -1387,10 +1394,14 @@ function updateProgress() {
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
 
-        // Hyper-Sync: Update MediaSession Position State EVERY SECOND for YouTube links
-        // This ensures the lock screen progress bar is perfectly aligned.
-        if (isPlaying && (song.type === 'youtube' || Math.floor(current) % 5 === 0)) {
-            updateMediaSessionPositionState();
+        // Resilience 13.0: Smooth & Stable Progress Sync
+        const currentSec = Math.floor(current);
+        if (isPlaying && (song.type === 'youtube' || currentSec % 5 === 0)) {
+            // Jitter Guard: Only sync with OS if we haven't synced this specific second yet
+            if (lastProgressSyncSec !== currentSec) {
+                updateMediaSessionPositionState();
+                lastProgressSyncSec = currentSec;
+            }
         }
     }
 }
