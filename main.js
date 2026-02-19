@@ -1137,10 +1137,11 @@ function playSong(index) {
             updateMediaSession(song);
             navigator.mediaSession.playbackState = "playing";
 
-            // 4. Load YouTube (Primary Focus Hunter)
+            // 5. Load YouTube (Primary Focus Hunter)
             ytPlayer.loadVideoById(videoId);
+
             userWantsToPlay = true;
-            isPlaying = true;
+            isPlaying = false; // Defer to onPlayerStateChange
             playPauseBtn.textContent = '⏸';
         } else {
             setStatus("WAITING FOR YT PLAYER...");
