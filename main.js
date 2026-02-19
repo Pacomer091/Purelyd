@@ -1196,20 +1196,23 @@ async function playSong(index) {
 function updateMediaSession(song) {
     if (!('mediaSession' in navigator)) return;
 
-    // Force clear old metadata to prevent OS caching (Stuck Cover fix)
-    navigator.mediaSession.metadata = null;
+    // Clear metadata first to force a refresh in the OS UI
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = null;
+    }
+
+    const artworkUrl = song.cover || getThumbnail(song);
+    // Add unique timestamp to bust OS artwork cache (Fixed Stuck Cover)
+    const artworkWithCacheBust = `${artworkUrl}${artworkUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
 
     navigator.mediaSession.metadata = new MediaMetadata({
         title: song.title,
         artist: song.artist,
         album: 'Purelyd Music',
         artwork: [
-            { src: song.cover || getThumbnail(song), sizes: '96x96', type: 'image/png' },
-            { src: song.cover || getThumbnail(song), sizes: '128x128', type: 'image/png' },
-            { src: song.cover || getThumbnail(song), sizes: '192x192', type: 'image/png' },
-            { src: song.cover || getThumbnail(song), sizes: '256x256', type: 'image/png' },
-            { src: song.cover || getThumbnail(song), sizes: '384x384', type: 'image/png' },
-            { src: song.cover || getThumbnail(song), sizes: '512x512', type: 'image/png' }
+            { src: artworkWithCacheBust, sizes: '96x96', type: 'image/png' },
+            { src: artworkWithCacheBust, sizes: '192x192', type: 'image/png' },
+            { src: artworkWithCacheBust, sizes: '512x512', type: 'image/png' }
         ]
     });
 
@@ -1298,15 +1301,18 @@ function updateMediaSessionPositionState() {
             rate = audioElement.playbackRate || 1;
         }
 
-        if (duration && !isNaN(duration) && duration > 1 && !isNaN(currentTime)) {
+        if (duration && !isNaN(duration) && duration > 5 && !isNaN(currentTime)) {
             try {
+                // Ensure position doesn't exceed duration (Fixed Bugged Minutes)
+                const safePosition = Math.min(Math.max(0, currentTime), duration);
+
                 navigator.mediaSession.setPositionState({
                     duration: duration,
-                    playbackRate: (userWantsToPlay && !document.hidden) ? rate : (userWantsToPlay ? rate : 0),
-                    position: Math.min(Math.max(0, currentTime), duration)
+                    playbackRate: isPlaying ? rate : 0,
+                    position: safePosition
                 });
             } catch (e) {
-                // If it fails, common in background transitions, we ignore to prevent JS crash
+                // Ignore silent errors during transition
             }
         }
     }
@@ -1461,19 +1467,15 @@ function updateProgress() {
         // WATCHDOG: Force sync even if background-paused
         if (userWantsToPlay) {
             // Heartbeat: If time moved OR if we are backgrounded and time is stuck
-            if (lastProgressSyncSec !== currentSec || (document.hidden && isPlaying === false)) {
+            if (lastProgressSyncSec !== currentSec || (document.hidden && !isPlaying)) {
                 updateMediaSessionPositionState();
-                lastProgressSyncSec = currentSec;
 
-                // Re-engage focus if backgrounded
-                if (document.hidden) {
+                // Authoritative re-engagement of focus in background
+                if (document.hidden && lastProgressSyncSec !== currentSec) {
                     startKeepAlive();
-                    // Authoritative watchdog resume (Kicks YouTube if it paused itself)
-                    if (ytReady && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PAUSED) {
-                        console.log("Watchdog: Forcing YouTube resume in background...");
-                        ytPlayer.playVideo();
-                    }
                 }
+
+                lastProgressSyncSec = currentSec;
             }
         }
     } else if (userWantsToPlay) {
