@@ -140,7 +140,8 @@ window.onYouTubeIframeAPIReady = function () {
                 'modestbranding': 1,
                 'rel': 0,
                 'enablejsapi': 1,
-                'origin': window.location.origin || '*'
+                'origin': window.location.origin || '*',
+                'playsinline': 1
             },
             events: {
                 'onReady': onPlayerReady,
@@ -1095,9 +1096,10 @@ function playSong(index) {
     const song = songs[index];
     if (!song) return;
 
-    // 1. Establish high-trust environment IMMEDIATELY (Eliminate Race Condition)
-    initMediaSessionHandlers();
+    // Resilience 10.0: Synchronous Gesture Blessing
+    // First interaction MUST play the silent anchor WITHOUT ANY ASYNC DELAY.
     startKeepAlive();
+    initMediaSessionHandlers();
     updateMediaSession(song);
 
     // Stop previous players
@@ -1377,13 +1379,15 @@ function updateProgress() {
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
 
-        // Resilience 9.0: Stable Progress Sync
-        // Update MediaSession Position State every 3 seconds to reduce jitter/CPU usage
-        // This makes the lock screen progress bar much smoother and more reliable.
-        if (isPlaying && (song.type === 'youtube' && Math.floor(current) % 3 === 0)) {
-            updateMediaSessionPositionState();
-        } else if (isPlaying && song.type === 'audio' && Math.floor(current) % 5 === 0) {
-            updateMediaSessionPositionState();
+        // Resilience 10.0: Smooth & Stable Progress Sync
+        // Restore 1s frequency but only update OS if the second has actually changed.
+        const currentSec = Math.floor(current);
+        if (isPlaying && (song.type === 'youtube' || currentSec % 5 === 0)) {
+            // Jitter Guard: Only sync with OS if we haven't synced this specific second yet
+            if (this._lastSyncSec !== currentSec) {
+                updateMediaSessionPositionState();
+                this._lastSyncSec = currentSec;
+            }
         }
     }
 }
