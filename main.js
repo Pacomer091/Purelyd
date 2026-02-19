@@ -134,7 +134,7 @@ window.onYouTubeIframeAPIReady = function () {
             height: '200',
             width: '200',
             playerVars: {
-                'autoplay': 1,
+                'autoplay': 0,
                 'controls': 0,
                 'disablekb': 1,
                 'fs': 0,
@@ -1089,7 +1089,7 @@ async function exportAllSongs() {
     alert("Lista de canciones exportada a la consola (F12). Cópiamela para incluirla en el despliegue.");
 }
 
-function playSong(index) {
+async function playSong(index) {
     currentSongIndex = index;
     const song = songs[index];
     if (!song) return;
@@ -1153,14 +1153,17 @@ function playSong(index) {
     } else {
         setStatus("PLAYING AUDIO FILE");
         audioElement.src = song.url;
-        audioElement.play().catch(e => {
+        audioElement.play().then(() => {
+            isPlaying = true;
+            updateMediaSessionPositionState();
+            startKeepAlive();
+        }).catch(e => {
             setStatus("AUDIO ERROR");
             console.error("Playback error:", e);
         });
         userWantsToPlay = true;
-        isPlaying = true;
+        isPlaying = false; // Defer until success
         playPauseBtn.textContent = '⏸';
-        startKeepAlive();
     }
 
     updateMediaSession(song);
