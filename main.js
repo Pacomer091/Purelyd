@@ -134,7 +134,7 @@ window.onYouTubeIframeAPIReady = function () {
             height: '200',
             width: '200',
             playerVars: {
-                'autoplay': 0,
+                'autoplay': 1,
                 'controls': 0,
                 'disablekb': 1,
                 'fs': 0,
@@ -1089,7 +1089,7 @@ async function exportAllSongs() {
     alert("Lista de canciones exportada a la consola (F12). Cópiamela para incluirla en el despliegue.");
 }
 
-async function playSong(index) {
+function playSong(index) {
     currentSongIndex = index;
     const song = songs[index];
     if (!song) return;
@@ -1129,26 +1129,16 @@ async function playSong(index) {
             }
             lastProgressSyncSec = -1;
 
-            // 2. Warm up web audio stack synchronously (AWAITED Gesture)
+            // 2. Warm up web audio stack synchronously
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
+            if (audioContext.state === 'suspended') audioContext.resume();
 
-            // 3. Prime MediaSession Actions BEFORE play
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.setActionHandler('play', () => ytPlayer.playVideo());
-                navigator.mediaSession.setActionHandler('pause', () => ytPlayer.pauseVideo());
-            }
-
-            // 4. Warm up MediaSession with REAL metadata immediately
+            // 3. Warm up MediaSession with REAL metadata immediately
             updateMediaSession(song);
             navigator.mediaSession.playbackState = "playing";
 
-            // 5. Load & Explicitly Play YouTube (Iron Handshake)
+            // 4. Load YouTube (Primary Focus Hunter)
             ytPlayer.loadVideoById(videoId);
-            ytPlayer.playVideo();
-
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
