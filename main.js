@@ -134,7 +134,7 @@ window.onYouTubeIframeAPIReady = function () {
             height: '200',
             width: '200',
             playerVars: {
-                'autoplay': 0,
+                'autoplay': 1,
                 'controls': 0,
                 'disablekb': 1,
                 'fs': 0,
@@ -1162,7 +1162,7 @@ async function playSong(index) {
             console.error("Playback error:", e);
         });
         userWantsToPlay = true;
-        isPlaying = false; // Defer until success
+        isPlaying = false;
         playPauseBtn.textContent = '⏸';
     }
 
