@@ -140,8 +140,7 @@ window.onYouTubeIframeAPIReady = function () {
                 'modestbranding': 1,
                 'rel': 0,
                 'enablejsapi': 1,
-                'origin': window.location.origin || '*',
-                'playsinline': 1
+                'origin': window.location.origin || '*'
             },
             events: {
                 'onReady': onPlayerReady,
@@ -202,12 +201,9 @@ function onPlayerStateChange(event) {
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
-            // Hardware Handshake (v7.0): Rapid cycle to force OS privilege
-            navigator.mediaSession.playbackState = "paused";
-            setTimeout(() => {
-                navigator.mediaSession.playbackState = "playing";
-                updateMediaSession(songs[currentSongIndex]);
-            }, 50);
+            navigator.mediaSession.playbackState = "playing";
+            // Force metadata refresh exactly when state becomes PLAYING
+            updateMediaSession(songs[currentSongIndex]);
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1116,13 +1112,11 @@ function playSong(index) {
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
             // Force hardware activation
-            ytPlayer.loadVideoById(videoId);
-            userWantsToPlay = true;
-            isPlaying = true;
             playPauseBtn.textContent = '⏸';
             // Ghost Skip: Trigger micro-play/pause on silent track 
             // to claim "System Gesture" privileges for the domain.
             startKeepAlive();
+            setTimeout(() => { if (isPlaying) startKeepAlive(); }, 500);
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
@@ -1286,7 +1280,7 @@ function startKeepAlive() {
         if (silentAudio.src !== SILENT_TRACK) {
             silentAudio.src = SILENT_TRACK;
             silentAudio.loop = true;
-            silentAudio.volume = 0.01; // Boosted for better OS detection (still very low)
+            silentAudio.volume = 0.001; // Not muted, but nearly inaudible
         }
         // Always try to play, even if already playing (no-op)
         silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
@@ -1375,7 +1369,8 @@ function updateProgress() {
         currentTimeEl.textContent = formatTime(current);
         totalTimeEl.textContent = formatTime(duration);
 
-        // Restore v7.0 Progress Sync: Fluid second-by-second for YouTube
+        // Hyper-Sync: Update MediaSession Position State EVERY SECOND for YouTube links
+        // This ensures the lock screen progress bar is perfectly aligned.
         if (isPlaying && (song.type === 'youtube' || Math.floor(current) % 5 === 0)) {
             updateMediaSessionPositionState();
         }
