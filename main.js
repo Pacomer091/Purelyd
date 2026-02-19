@@ -1098,6 +1098,9 @@ async function playSong(index) {
     audioElement.pause();
     if (ytReady && ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
 
+    // Background Resilience: Ensure silence starts for every track
+    startKeepAlive();
+
     // Update UI
     document.querySelector('.player-song-info .song-name').textContent = song.title;
     document.querySelector('.player-song-info .artist-name').textContent = song.artist;
@@ -1399,8 +1402,8 @@ function updateProgress() {
 
         // Resilience 13.0: Smooth & Stable Progress Sync
         const currentSec = Math.floor(current);
-        if (isPlaying && (song.type === 'youtube' || currentSec % 5 === 0)) {
-            // Jitter Guard: Only sync with OS if we haven't synced this specific second yet
+        if (isPlaying) {
+            // High-frequency sync (1s) to keep Android background focus locked
             if (lastProgressSyncSec !== currentSec) {
                 updateMediaSessionPositionState();
                 lastProgressSyncSec = currentSec;
