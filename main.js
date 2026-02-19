@@ -33,9 +33,30 @@ let isSelectMode = false;
 let selectedSongIds = [];
 let userWantsToPlay = false; // Persistent state for background bypass
 
-// Resilience 17.0: Persistent Ambient Focus
-let ambientOsc = null;
-let ambientGain = null;
+const anchorVideo = document.getElementById('anchor-video');
+let anchorActivated = false;
+
+// Resilience 18.0: The "Invisible Anchor" Hack
+function activateAnchor() {
+    if (anchorActivated) return;
+    anchorActivated = true;
+
+    // Tiny valid silent mp4 (0.1s)
+    const silentVideo = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAbXA0MgAAAABtcDQyaXNvbWF2YzEAAABsbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAAAQAAr8AAACmQAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAGWlvZHMAAAAAE///A/8AAACAAABAHmF2Y2MAVUA8/88AAAABYXZjMQAAAAAAAAAAAAAAAAAAAAAAAABIAEgAAABsbXd0YXMAbW9vdgAAAAB0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAACmQAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAgAAAAEAAAAAAWVkaXQAAAAcaWRhdAAAAAAAR8A8/88AAAABYXZjMQ==";
+
+    anchorVideo.src = silentVideo;
+    anchorVideo.play().catch(e => console.log("Anchor failed (expected on first load):", e));
+
+    // Document stays as a "Media Producer" forever
+    console.log("⚓ Anchor Video Activated (Background Shield Active)");
+
+    // Clean up
+    document.removeEventListener('click', activateAnchor);
+    document.removeEventListener('touchstart', activateAnchor);
+}
+
+document.addEventListener('click', activateAnchor);
+document.addEventListener('touchstart', activateAnchor);
 
 // DOM Elements
 const songGrid = document.getElementById('song-grid');
@@ -1118,37 +1139,24 @@ async function playSong(index) {
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
 
-            // Resilience 17.0: Ambient Harmonic Focus Handshake
-            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioContext.state === 'suspended') audioContext.resume();
-
-            // Initialize Persistent Focus (Document Anchor)
-            if (!ambientOsc) {
-                try {
-                    ambientOsc = audioContext.createOscillator();
-                    ambientGain = audioContext.createGain();
-                    ambientOsc.connect(ambientGain);
-                    ambientGain.connect(audioContext.destination);
-                    ambientGain.gain.setValueAtTime(0.0005, audioContext.currentTime); // Inaudible but "Audible"
-                    ambientOsc.start();
-                } catch (e) {
-                    console.warn("Ambient focus init failed", e);
-                }
-            }
-
-            // 2. Hard State Reset (Zero-Time Scrub)
+            // Resilience 13.0: Hard State Reset
+            // 1. Scrub previous state to prevent "Sticky Timestamp" bug
             if ('mediaSession' in navigator) {
                 navigator.mediaSession.playbackState = "none";
                 try {
                     // Force a zero-state to bridge the gap
                     navigator.mediaSession.setPositionState({
-                        duration: 120, // Dummy length
+                        duration: 120, // Dummy
                         playbackRate: 0,
                         position: 0
                     });
                 } catch (e) { }
             }
             lastProgressSyncSec = -1;
+
+            // 2. Warm up web audio stack synchronously
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') audioContext.resume();
 
             // 3. Warm up MediaSession with REAL metadata immediately
             updateMediaSession(song);
@@ -1157,7 +1165,7 @@ async function playSong(index) {
             // 4. Load YouTube (Primary Focus Hunter)
             ytPlayer.loadVideoById(videoId);
             userWantsToPlay = true;
-            isPlaying = false; // DEFER to onPlayerStateChange to fix "minutos" bug
+            isPlaying = false; // Defer to onPlayerStateChange
             playPauseBtn.textContent = '⏸';
         } else {
             setStatus("WAITING FOR YT PLAYER...");
