@@ -1081,7 +1081,10 @@ function setupEventListeners() {
             navigator.mediaSession.playbackState = "paused";
             updateMediaSessionPositionState();
         }
-        stopKeepAlive();
+        // ONLY stop keep-alive if the user EXPLICITLY paused
+        if (!userWantsToPlay) {
+            stopKeepAlive();
+        }
     };
 }
 
@@ -1308,21 +1311,21 @@ function seekToTime(time) {
 
 // Background Keep-Alive Logic
 const silentAudio = document.getElementById('silent-audio');
-const SILENT_TRACK = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+const SILENT_TRACK_FILE = "silent_keepalive.mp3";
 let keepAliveOsc = null;
 
 function startKeepAlive() {
-    // 1. Audio Tag Keep-Alive
+    // 1. Audio Tag Keep-Alive (Physical File)
     if (silentAudio) {
-        if (silentAudio.src !== SILENT_TRACK) {
-            silentAudio.src = SILENT_TRACK;
+        if (!silentAudio.src.includes(SILENT_TRACK_FILE)) {
+            silentAudio.src = SILENT_TRACK_FILE;
             silentAudio.loop = true;
             silentAudio.volume = 0.001;
         }
         silentAudio.play().catch(() => { });
     }
 
-    // 2. Web Audio Oscillator ("The Iron Focus")
+    // 2. Web Audio Oscillator
     // This creates a continuous signal that Android's OOM killer respects more.
     try {
         if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1335,11 +1338,8 @@ function startKeepAlive() {
             keepAliveOsc.connect(gainNode);
             gainNode.connect(audioContext.destination);
             keepAliveOsc.start();
-            console.log("Iron Focus Keep-Alive Started");
         }
-    } catch (e) {
-        console.warn("WebAudio Keep-Alive failed:", e);
-    }
+    } catch (e) { }
 }
 
 // Global Interaction Unlock: "Warm up" the audio context on first click
@@ -1433,13 +1433,22 @@ function updateProgress() {
 
         // Resilience 13.0: Smooth & Stable Progress Sync
         const currentSec = Math.floor(current);
-        if (isPlaying) {
-            // High-frequency sync (1s) to keep Android background focus locked
+
+        // WATCHDOG: Force sync even if background-paused
+        if (userWantsToPlay) {
             if (lastProgressSyncSec !== currentSec) {
                 updateMediaSessionPositionState();
                 lastProgressSyncSec = currentSec;
+
+                // Re-engage focus if backgrounded
+                if (document.hidden) {
+                    startKeepAlive();
+                }
             }
         }
+    } else if (userWantsToPlay) {
+        // Fallback sync for buffering or paused states
+        updateMediaSessionPositionState();
     }
 }
 
