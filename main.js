@@ -220,24 +220,10 @@ function onPlayerStateChange(event) {
         isPlaying = false;
         playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
-            // Keep playbackState as "playing" to prevent Android from killing the task
-            // even if YouTube is buffering/paused by system.
-            navigator.mediaSession.playbackState = userWantsToPlay ? "playing" : "paused";
+            navigator.mediaSession.playbackState = "paused";
             updateMediaSessionPositionState();
         }
-
-        // Resilience 14.0: Aggressive Background Resume
-        if (userWantsToPlay && document.hidden) {
-            console.log("Background pause detected, attempted auto-resume...");
-            setTimeout(() => {
-                if (userWantsToPlay && ytReady) ytPlayer.playVideo();
-            }, 100);
-        }
-
-        // ONLY stop keep-alive if the user EXPLICITLY paused (userWantsToPlay is false)
-        if (!userWantsToPlay) {
-            stopKeepAlive();
-        }
+        stopKeepAlive();
     }
 }
 
@@ -1196,23 +1182,12 @@ async function playSong(index) {
 function updateMediaSession(song) {
     if (!('mediaSession' in navigator)) return;
 
-    // Clear metadata first to force a refresh in the OS UI
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.metadata = null;
-    }
-
-    const artworkUrl = song.cover || getThumbnail(song);
-    // Add unique timestamp to bust OS artwork cache (Fixed Stuck Cover)
-    const artworkWithCacheBust = `${artworkUrl}${artworkUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
-
     navigator.mediaSession.metadata = new MediaMetadata({
         title: song.title,
         artist: song.artist,
         album: 'Purelyd Music',
         artwork: [
-            { src: artworkWithCacheBust, sizes: '96x96', type: 'image/png' },
-            { src: artworkWithCacheBust, sizes: '192x192', type: 'image/png' },
-            { src: artworkWithCacheBust, sizes: '512x512', type: 'image/png' }
+            { src: song.cover || getThumbnail(song), sizes: '512x512', type: 'image/png' }
         ]
     });
 
@@ -1463,24 +1438,12 @@ function updateProgress() {
 
         // Resilience 13.0: Smooth & Stable Progress Sync
         const currentSec = Math.floor(current);
-
-        // WATCHDOG: Force sync even if background-paused
-        if (userWantsToPlay) {
-            // Heartbeat: If time moved OR if we are backgrounded and time is stuck
-            if (lastProgressSyncSec !== currentSec || (document.hidden && !isPlaying)) {
+        if (isPlaying) {
+            if (lastProgressSyncSec !== currentSec) {
                 updateMediaSessionPositionState();
-
-                // Authoritative re-engagement of focus in background
-                if (document.hidden && lastProgressSyncSec !== currentSec) {
-                    startKeepAlive();
-                }
-
                 lastProgressSyncSec = currentSec;
             }
         }
-    } else if (userWantsToPlay) {
-        // Fallback sync for buffering or paused states
-        updateMediaSessionPositionState();
     }
 }
 
