@@ -215,10 +215,15 @@ function onPlayerStateChange(event) {
         isPlaying = false;
         playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "paused";
+            // Keep playbackState as "playing" to prevent Android from killing the task
+            // even if YouTube is buffering/paused by system.
+            navigator.mediaSession.playbackState = userWantsToPlay ? "playing" : "paused";
             updateMediaSessionPositionState();
         }
-        stopKeepAlive();
+        // ONLY stop keep-alive if the user EXPLICITLY paused (userWantsToPlay is false)
+        if (!userWantsToPlay) {
+            stopKeepAlive();
+        }
     }
 }
 
@@ -1303,18 +1308,37 @@ function seekToTime(time) {
 
 // Background Keep-Alive Logic
 const silentAudio = document.getElementById('silent-audio');
-// Using a more robust 1-second silent track to avoid aggressive OS throttling
 const SILENT_TRACK = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+let keepAliveOsc = null;
 
 function startKeepAlive() {
+    // 1. Audio Tag Keep-Alive
     if (silentAudio) {
         if (silentAudio.src !== SILENT_TRACK) {
             silentAudio.src = SILENT_TRACK;
             silentAudio.loop = true;
-            silentAudio.volume = 0.001; // Not muted, but nearly inaudible
+            silentAudio.volume = 0.001;
         }
-        // Always try to play, even if already playing (no-op)
-        silentAudio.play().catch(e => console.log("Silent audio start suppressed"));
+        silentAudio.play().catch(() => { });
+    }
+
+    // 2. Web Audio Oscillator ("The Iron Focus")
+    // This creates a continuous signal that Android's OOM killer respects more.
+    try {
+        if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioContext.state === 'suspended') audioContext.resume();
+
+        if (!keepAliveOsc) {
+            keepAliveOsc = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0.0001; // Effectively silent but active
+            keepAliveOsc.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            keepAliveOsc.start();
+            console.log("Iron Focus Keep-Alive Started");
+        }
+    } catch (e) {
+        console.warn("WebAudio Keep-Alive failed:", e);
     }
 }
 
@@ -1333,6 +1357,13 @@ document.addEventListener('touchstart', () => {
 function stopKeepAlive() {
     if (silentAudio) {
         silentAudio.pause();
+    }
+    if (keepAliveOsc) {
+        try {
+            keepAliveOsc.stop();
+            keepAliveOsc.disconnect();
+        } catch (e) { }
+        keepAliveOsc = null;
     }
 }
 
