@@ -26,6 +26,7 @@ let isPlaying = false;
 let ytPlayer;
 let ytReady = false;
 let pendingSongId = null;
+let audioContext = null; // Audio Focus Warming Context
 let editingSongId = null; // Track which song is being edited
 let isSelectMode = false;
 let selectedSongIds = [];
@@ -203,9 +204,11 @@ function onPlayerStateChange(event) {
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
-            // Force metadata refresh exactly when state becomes PLAYING
+            // Authoritative metadata sync only when actually playing
             updateMediaSession(songs[currentSongIndex]);
         }
+        // Resilience 12.0: Defer silence until YT is confirmed PLAYING
+        // This ensures YouTube keeps the primary Audio Focus.
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
         isPlaying = false;
@@ -1109,14 +1112,29 @@ function playSong(index) {
         }
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
-            // Force hardware activation FIRST to capture user gesture
+
+            // Resilience 12.0: Audio Focus Handshake
+            // 1. Warm up web audio stack synchronously
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioContext.state === 'suspended') audioContext.resume();
+
+            // 2. Warm up MediaSession to "Media" class
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: 'Loading...',
+                    artist: 'Purelyd',
+                    album: 'Streaming Music',
+                    artwork: [{ src: 'favicon.ico', sizes: '512x512', type: 'image/x-icon' }]
+                });
+            }
+
+            // 3. Load YouTube (Primary Focus Hunter)
             ytPlayer.loadVideoById(videoId);
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
-            // Start silent anchor SECOND to maintain privileges
-            startKeepAlive();
-            setTimeout(() => { if (isPlaying) startKeepAlive(); }, 500);
+
+            // Note: startKeepAlive() deferred to onStateChange PLAYING
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
