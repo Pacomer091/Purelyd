@@ -202,7 +202,8 @@ function onPlayerStateChange(event) {
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
-            updateMediaSessionPositionState();
+            // Force metadata refresh exactly when state becomes PLAYING
+            updateMediaSession(songs[currentSongIndex]);
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1111,7 +1112,10 @@ function playSong(index) {
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
+            // Ghost Skip: Trigger micro-play/pause on silent track 
+            // to claim "System Gesture" privileges for the domain.
             startKeepAlive();
+            setTimeout(() => { if (isPlaying) startKeepAlive(); }, 500);
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
@@ -1208,13 +1212,8 @@ function initMediaSessionHandlers() {
         }
     }
 
-    // Set initial placeholder metadata to "warm up" the slot
-    navigator.mediaSession.metadata = new MediaMetadata({
-        title: 'Purelyd',
-        artist: 'Ready to play',
-        album: 'Purelyd Music',
-        artwork: [{ src: 'favicon.ico', sizes: '512x512', type: 'image/x-icon' }]
-    });
+    // Clear any generic placeholder metadata securely
+    navigator.mediaSession.metadata = null;
 }
 
 function updateMediaSessionPositionState() {
