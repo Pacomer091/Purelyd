@@ -201,12 +201,18 @@ function onPlayerStateChange(event) {
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
-            // Hardware Handshake: Rapid cycle to force OS privilege
-            navigator.mediaSession.playbackState = "paused";
+            // "The Ultimate Handshake" (Resilience 8.0)
+            // Rapid cycle mimics the manual "next/prev" gesture to grant OS privilege
+            navigator.mediaSession.playbackState = "playing";
             setTimeout(() => {
-                navigator.mediaSession.playbackState = "playing";
-                updateMediaSession(songs[currentSongIndex]);
-            }, 50);
+                if (!userWantsToPlay) return;
+                navigator.mediaSession.playbackState = "paused";
+                setTimeout(() => {
+                    if (!userWantsToPlay) return;
+                    navigator.mediaSession.playbackState = "playing";
+                    updateMediaSession(songs[currentSongIndex]);
+                }, 200);
+            }, 200);
         }
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
@@ -1092,6 +1098,11 @@ function playSong(index) {
     const song = songs[index];
     if (!song) return;
 
+    // 1. Establish high-trust environment IMMEDIATELY (Eliminate Race Condition)
+    initMediaSessionHandlers();
+    startKeepAlive();
+    updateMediaSession(song);
+
     // Stop previous players
     audioElement.pause();
     if (ytReady && ytPlayer && ytPlayer.stopVideo) ytPlayer.stopVideo();
@@ -1100,10 +1111,11 @@ function playSong(index) {
     document.querySelector('.player-song-info .song-name').textContent = song.title;
     document.querySelector('.player-song-info .artist-name').textContent = song.artist;
     const cover = song.cover || getThumbnail(song);
-    document.querySelector('.player-cover').style.backgroundImage = `url(${cover})`;
-    document.querySelector('.player-cover').style.backgroundSize = 'cover';
-
-    updateMediaSession(song);
+    const coverEl = document.querySelector('.player-cover');
+    if (coverEl) {
+        coverEl.style.backgroundImage = `url(${cover})`;
+        coverEl.style.backgroundSize = 'cover';
+    }
 
     const videoId = getYTId(song.url);
     if (song.type === 'youtube' || videoId) {
@@ -1118,8 +1130,6 @@ function playSong(index) {
             userWantsToPlay = true;
             isPlaying = true;
             playPauseBtn.textContent = '⏸';
-            // Start silent anchor immediately
-            startKeepAlive();
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
