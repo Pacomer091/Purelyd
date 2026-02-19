@@ -33,31 +33,6 @@ let isSelectMode = false;
 let selectedSongIds = [];
 let userWantsToPlay = false; // Persistent state for background bypass
 
-const anchorVideo = document.getElementById('anchor-video');
-let anchorActivated = false;
-
-// Resilience 18.0: The "Invisible Anchor" Hack
-function activateAnchor() {
-    if (anchorActivated) return;
-    anchorActivated = true;
-
-    // Tiny valid silent mp4 (0.1s)
-    const silentVideo = "data:video/mp4;base64,AAAAIGZ0eXBpc29tAAAAbXA0MgAAAABtcDQyaXNvbWF2YzEAAABsbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAAAQAAr8AAACmQAAABAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAAAGWlvZHMAAAAAE///A/8AAACAAABAHmF2Y2MAVUA8/88AAAABYXZjMQAAAAAAAAAAAAAAAAAAAAAAAABIAEgAAABsbXd0YXMAbW9vdgAAAAB0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAACmQAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAgAAAAEAAAAAAWVkaXQAAAAcaWRhdAAAAAAAR8A8/88AAAABYXZjMQ==";
-
-    anchorVideo.src = silentVideo;
-    anchorVideo.play().catch(e => console.log("Anchor failed (expected on first load):", e));
-
-    // Document stays as a "Media Producer" forever
-    console.log("⚓ Anchor Video Activated (Background Shield Active)");
-
-    // Clean up
-    document.removeEventListener('click', activateAnchor);
-    document.removeEventListener('touchstart', activateAnchor);
-}
-
-document.addEventListener('click', activateAnchor);
-document.addEventListener('touchstart', activateAnchor);
-
 // DOM Elements
 const songGrid = document.getElementById('song-grid');
 const addSongBtn = document.getElementById('add-song-btn');
