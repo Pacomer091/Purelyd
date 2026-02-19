@@ -161,6 +161,11 @@ function onPlayerReady(event) {
     ytReady = true;
     setStatus("READY");
     console.log("YouTube Player is ready");
+
+    // Refresh MediaSession immediately to fix "Stuck Cover" on first load
+    const song = songs[currentSongIndex];
+    if (song) updateMediaSession(song);
+
     if (pendingSongId) {
         setStatus("PLAYING PENDING...");
         ytPlayer.loadVideoById(pendingSongId);
@@ -220,6 +225,15 @@ function onPlayerStateChange(event) {
             navigator.mediaSession.playbackState = userWantsToPlay ? "playing" : "paused";
             updateMediaSessionPositionState();
         }
+
+        // Resilience 14.0: Aggressive Background Resume
+        if (userWantsToPlay && document.hidden) {
+            console.log("Background pause detected, attempted auto-resume...");
+            setTimeout(() => {
+                if (userWantsToPlay && ytReady) ytPlayer.playVideo();
+            }, 100);
+        }
+
         // ONLY stop keep-alive if the user EXPLICITLY paused (userWantsToPlay is false)
         if (!userWantsToPlay) {
             stopKeepAlive();
@@ -1182,11 +1196,19 @@ async function playSong(index) {
 function updateMediaSession(song) {
     if (!('mediaSession' in navigator)) return;
 
+    // Force clear old metadata to prevent OS caching (Stuck Cover fix)
+    navigator.mediaSession.metadata = null;
+
     navigator.mediaSession.metadata = new MediaMetadata({
         title: song.title,
         artist: song.artist,
         album: 'Purelyd Music',
         artwork: [
+            { src: song.cover || getThumbnail(song), sizes: '96x96', type: 'image/png' },
+            { src: song.cover || getThumbnail(song), sizes: '128x128', type: 'image/png' },
+            { src: song.cover || getThumbnail(song), sizes: '192x192', type: 'image/png' },
+            { src: song.cover || getThumbnail(song), sizes: '256x256', type: 'image/png' },
+            { src: song.cover || getThumbnail(song), sizes: '384x384', type: 'image/png' },
             { src: song.cover || getThumbnail(song), sizes: '512x512', type: 'image/png' }
         ]
     });
@@ -1276,15 +1298,15 @@ function updateMediaSessionPositionState() {
             rate = audioElement.playbackRate || 1;
         }
 
-        if (duration && !isNaN(duration) && duration > 0 && !isNaN(currentTime)) {
+        if (duration && !isNaN(duration) && duration > 1 && !isNaN(currentTime)) {
             try {
                 navigator.mediaSession.setPositionState({
                     duration: duration,
-                    playbackRate: isPlaying ? rate : 0,
-                    position: Math.min(currentTime, duration)
+                    playbackRate: (userWantsToPlay && !document.hidden) ? rate : (userWantsToPlay ? rate : 0),
+                    position: Math.min(Math.max(0, currentTime), duration)
                 });
             } catch (e) {
-                console.warn("Error updating position state:", e);
+                // If it fails, common in background transitions, we ignore to prevent JS crash
             }
         }
     }
@@ -1370,7 +1392,9 @@ function stopKeepAlive() {
 // Ensure silence plays whenever music starts to tell the OS we are active
 document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-        // Refresh UI immediately when returning
+        // Refresh UI & Metadata immediately when returning
+        const song = songs[currentSongIndex];
+        if (song) updateMediaSession(song);
         updateProgress();
 
         // Resume YouTube if user wanted it to play but system paused it
@@ -1436,13 +1460,19 @@ function updateProgress() {
 
         // WATCHDOG: Force sync even if background-paused
         if (userWantsToPlay) {
-            if (lastProgressSyncSec !== currentSec) {
+            // Heartbeat: If time moved OR if we are backgrounded and time is stuck
+            if (lastProgressSyncSec !== currentSec || (document.hidden && isPlaying === false)) {
                 updateMediaSessionPositionState();
                 lastProgressSyncSec = currentSec;
 
                 // Re-engage focus if backgrounded
                 if (document.hidden) {
                     startKeepAlive();
+                    // Authoritative watchdog resume (Kicks YouTube if it paused itself)
+                    if (ytReady && ytPlayer.getPlayerState && ytPlayer.getPlayerState() === YT.PlayerState.PAUSED) {
+                        console.log("Watchdog: Forcing YouTube resume in background...");
+                        ytPlayer.playVideo();
+                    }
                 }
             }
         }
