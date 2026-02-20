@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Purelyd Music - YouTube Music Clone</title>
     <link rel="stylesheet" href="style.css">
     <link rel="manifest" href="manifest.json">
@@ -20,6 +20,10 @@
         <div id="sidebar-overlay" class="sidebar-overlay"></div>
         <!-- Sidebar -->
         <aside class="sidebar">
+            <div id="debug-console"
+                style="position: absolute; top:0; left:0; width: 100%; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.9); color: #00ff00; font-family: monospace; font-size: 10px; z-index: 10000; pointer-events: none; padding: 5px; border-bottom: 1px solid #00ff00;">
+                DEBUG READY
+            </div>
             <div class="logo">
                 <svg viewBox="0 0 100 100" class="logo-svg">
                     <defs>
@@ -278,7 +282,8 @@
     <audio id="audio-element"></audio>
     <audio id="silent-audio" loop style="display:none;"></audio>
     <div id="youtube-player"
-        style="position: fixed; top: 10px; left: 10px; width: 1px; height: 1px; z-index: -100; opacity: 0.01; pointer-events: none;">
+        style="position: fixed; bottom: 80px; right: 10px; width: 160px; height: 90px; z-index: 1000; pointer-events: none; border-radius: 8px; overflow: hidden; opacity: 0.8;"
+        allow="autoplay; encrypted-media">
     </div>
 
     <!-- Context Menu -->

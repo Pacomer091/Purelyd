@@ -1,0 +1,9 @@
+{
+  "appId": "com.purelyd.music",
+  "appName": "Purelyd",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https",
+    "hostname": "pacomer091.github.io"
+  }
+}

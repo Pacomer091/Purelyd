@@ -19,7 +19,18 @@ let searchTerm = '';
 // Global error handler for debugging
 window.onerror = function (msg, url, line) {
     console.error(`[Global Error] ${msg} at ${line}`);
+    debugLog(`ERR: ${msg} (L${line})`);
 };
+
+function debugLog(msg) {
+    const logEl = document.getElementById('debug-console');
+    if (logEl) {
+        const entry = document.createElement('div');
+        entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.prepend(entry);
+    }
+    console.log(`[DEBUG] ${msg}`);
+}
 
 let currentSongIndex = 0;
 let isPlaying = false;
@@ -127,6 +138,8 @@ window.onYouTubeIframeAPIReady = function () {
     if (window.location.protocol === 'file:') {
         console.warn("WARNING: Running from file:// protocol. YouTube API may be blocked.");
         setStatus("FILE PROTOCOL DETECTED (MAY BLOCK YT)");
+    } else {
+        setStatus("PROTOCOL: " + window.location.protocol);
     }
 
     try {
@@ -135,14 +148,14 @@ window.onYouTubeIframeAPIReady = function () {
             width: '200',
             playerVars: {
                 'autoplay': 1,
-                'controls': 0,
+                'controls': 1, // Let's try with controls visible initially for debug
                 'disablekb': 1,
                 'fs': 0,
                 'iv_load_policy': 3,
                 'modestbranding': 1,
                 'rel': 0,
                 'enablejsapi': 1,
-                'origin': window.location.origin || '*',
+                'origin': window.location.origin,
                 'playsinline': 1
             },
             events: {
@@ -151,11 +164,20 @@ window.onYouTubeIframeAPIReady = function () {
                 'onError': onPlayerError
             }
         });
+        setStatus("PLAYER CREATED, WAITING READY...");
     } catch (e) {
         setStatus("INIT ERROR: " + e.message);
+        debugLog("YT INIT ERROR: " + e.message);
         console.error(e);
     }
 };
+
+// Safety: Trigger manually if script loaded before main.js
+if (window.YT && window.YT.Player) {
+    console.log("YT API already present, triggering manual init");
+    window.onYouTubeIframeAPIReady();
+}
+
 
 function onPlayerReady(event) {
     ytReady = true;
@@ -174,20 +196,27 @@ function onPlayerReady(event) {
     }
 }
 
-function onPlayerError(e) {
-    const errorMap = {
-        2: "Invalid ID",
-        5: "HTML5 Error",
-        100: "Not Found",
-        101: "Embedded Disabled",
-        150: "Embedded Disabled"
-    };
-    const errorMsg = errorMap[e.data] || `Error Code ${e.data}`;
-    setStatus(`ERROR: ${errorMsg}`);
-    console.error("YouTube Player Error:", e.data);
+function kickstartYouTubeVisibility() {
+    const iframe = document.getElementById('youtube-player');
+    if (!iframe) return;
 
-    if (e.data === 101 || e.data === 150) {
-        alert("Este vídeo tiene desactivada la reproducción en otras webs. Prueba con otro enlace.");
+    // Pulse visibility to ensure render pipeline engagement
+    iframe.style.opacity = "1";
+    iframe.style.zIndex = "10001";
+    iframe.focus();
+
+    setTimeout(() => {
+        iframe.style.opacity = "0.8";
+        iframe.style.zIndex = "1000";
+    }, 4000);
+}
+
+function onPlayerError(event) {
+    console.error("YouTube Player Error:", event.data);
+    setStatus("YT ERROR: " + event.data);
+    // 101/150 = Video not allowed in embedded players
+    if (event.data === 101 || event.data === 150) {
+        nextSong();
     }
 }
 
@@ -208,6 +237,11 @@ function onPlayerStateChange(event) {
         isPlaying = true;
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
+
+        // Resilience 14.0: Restore Volume strictly after confirmed playback
+        if (ytPlayer.unMute) ytPlayer.unMute();
+        if (ytPlayer.setVolume) ytPlayer.setVolume(volumeSlider.value);
+
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
             // Authoritative metadata sync only when actually playing
@@ -1097,7 +1131,7 @@ async function exportAllSongs() {
     alert("Lista de canciones exportada a la consola (F12). Cópiamela para incluirla en el despliegue.");
 }
 
-async function playSong(index) {
+function playSong(index) {
     currentSongIndex = index;
     const song = songs[index];
     if (!song) return;
@@ -1124,6 +1158,7 @@ async function playSong(index) {
         }
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
+            kickstartYouTubeVisibility();
 
             // Resilience 13.0: Hard State Reset
             // 1. Scrub previous state to prevent "Sticky Timestamp" bug
@@ -1149,7 +1184,11 @@ async function playSong(index) {
             navigator.mediaSession.playbackState = "playing";
 
             // 4. Load YouTube (Primary Focus Hunter)
+            // Muted Autoplay Resilience: Mobile browsers/WebViews often allow autoplay 
+            // if the video starts muted. We'll unmute in onPlayerStateChange.
+            if (ytPlayer.mute) ytPlayer.mute();
             ytPlayer.loadVideoById(videoId);
+            ytPlayer.playVideo(); // Explicitly call play
             userWantsToPlay = true;
             isPlaying = false; // Defer to onPlayerStateChange
             playPauseBtn.textContent = '⏸';
@@ -1157,7 +1196,7 @@ async function playSong(index) {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
             userWantsToPlay = true;
-            isPlaying = true;
+            isPlaying = false;
             playPauseBtn.textContent = '⏸';
         }
     } else {
@@ -1396,12 +1435,15 @@ document.addEventListener('visibilitychange', () => {
 
 function togglePlay() {
     const song = songs[currentSongIndex];
-    if (song.type === 'youtube') {
+    if (song.url.includes("youtube.com") || song.url.includes("youtu.be")) {
+        if (!ytReady) return setStatus("YT NOT READY");
+
         const state = ytPlayer.getPlayerState();
-        if (state === YT.PlayerState.PLAYING) {
+        if (state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING) {
             ytPlayer.pauseVideo();
             userWantsToPlay = false;
         } else {
+            kickstartYouTubeVisibility();
             ytPlayer.playVideo();
             userWantsToPlay = true;
         }
@@ -1533,8 +1575,6 @@ function clearLibrary() {
     }
 }
 
-init();
-
 // Selection Mode Helpers
 function toggleSelectMode() {
     isSelectMode = !isSelectMode;
@@ -1623,3 +1663,5 @@ async function bulkAddToPlaylist() {
         };
     });
 }
+
+init();
