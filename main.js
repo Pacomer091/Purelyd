@@ -594,21 +594,49 @@ function setupEventListeners() {
         mobileLibOverlay.classList.remove('active');
     };
 
-    mobNavPlaylists.onclick = () => {
-        // Scroll to the sidebar's playlist section if possible, 
-        // or just open the sidebar if we want to show playlists.
-        // On mobile, the sidebar is hidden, so maybe we should just
-        // show a specific playlist view or just notify the user.
-        // For now, let's just close the overlay and maybe scroll to the top
-        // or toggle the sidebar if it still exists (it's hidden in CSS though).
-        // Best approach: If we had a 'Playlists' view, load it.
-        // Since playlists are in the sidebar, let's just alert for now or
-        // implement a quick way to see them.
+    mobNavPlaylists.onclick = async () => {
         mobileLibOverlay.classList.remove('active');
-        // Let's assume the user wants to see the list of playlists.
-        // Since we don't have a dedicated 'Playlists' main view yet,
-        // maybe we should create one. But for now, let's just close.
-        alert("Accede a tus playlists desde el menú lateral en escritorio!");
+        if (!currentUser) return showAuthModal();
+        await loadPlaylists();
+        if (playlists.length === 0) {
+            alert('No tienes playlists. ¡Crea una primero!');
+            return;
+        }
+        // Show playlists in the main content area
+        const mainHeading = document.querySelector('.content-area h1');
+        if (mainHeading) mainHeading.textContent = 'Mis Playlists';
+        songGrid.innerHTML = playlists.map(p => `
+            <div class="song-card" data-playlist-id="${p.id}" style="cursor:pointer;">
+                <div class="song-cover" style="background: linear-gradient(135deg, #ff0033, #ff6b6b); display:flex; align-items:center; justify-content:center; font-size:2.5rem;">📁</div>
+                <div class="song-info">
+                    <div class="song-title">${p.name}</div>
+                    <div class="song-artist">${(p.songIds || []).length} canciones</div>
+                </div>
+            </div>
+        `).join('') + `
+            <div class="song-card" id="mobile-back-home" style="cursor:pointer;">
+                <div class="song-cover" style="background: rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:2.5rem;">←</div>
+                <div class="song-info">
+                    <div class="song-title">Volver al inicio</div>
+                    <div class="song-artist">Ver todas las canciones</div>
+                </div>
+            </div>
+        `;
+        // Attach click handlers for each playlist card
+        document.querySelectorAll('[data-playlist-id]').forEach(card => {
+            card.onclick = async () => {
+                currentPlaylistId = parseInt(card.dataset.playlistId);
+                navHome.classList.remove('active');
+                navUploads.classList.remove('active');
+                navFavorites.classList.remove('active');
+                await loadUserSongs();
+                renderSongs();
+                renderPlaylists();
+            };
+        });
+        // Back to home handler
+        const backBtn = document.getElementById('mobile-back-home');
+        if (backBtn) backBtn.onclick = () => navHome.click();
     };
 
     // Close overlays when clicking close or outside (the overlay itself is the backdrop)
