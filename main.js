@@ -1126,18 +1126,21 @@ async function playSong(index) {
             needsGestureKickstart = false;
             pendingKickstartIndex = index;
 
-            // UI Instructions
+            // UI Instructions - Explicit overwrite
             const bridgeTitle = "⚠️ Pulsa ⏭️ para empezar";
             const bridgeArtist = "Sincronizando permisos de audio...";
+
             document.querySelector('.player-song-info .song-name').textContent = bridgeTitle;
             document.querySelector('.player-song-info .artist-name').textContent = bridgeArtist;
+            document.querySelector('.player-cover').style.backgroundImage = 'none';
+            document.querySelector('.player-cover').style.backgroundColor = '#1a1a1a';
 
             setStatus("ESPERANDO GESTO (Pulsa Siguiente)");
 
-            // Prime the audio engine with a real interaction
+            // Prime the audio engine
             audioElement.src = SILENT_TRACK_FILE;
             audioElement.play().catch(e => {
-                console.warn("Autoplay block detected, waiting for Next button");
+                console.warn("Autoplay block (Expected)");
             });
 
             // MediaSession instructions
@@ -1148,6 +1151,7 @@ async function playSong(index) {
                     album: "Purelyd Web",
                     artwork: [{ src: "https://img.icons8.com/color/512/music.png", sizes: "512x512", type: "image/png" }]
                 });
+                navigator.mediaSession.playbackState = "paused";
             }
             return;
         }
