@@ -1282,8 +1282,6 @@ function initMediaSessionHandlers() {
             console.warn(`The media session action "${action}" is not supported yet.`);
         }
     }
-
-}
 }
 
 function updateMediaSessionPositionState() {
