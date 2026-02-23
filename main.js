@@ -219,14 +219,14 @@ function onPlayerStateChange(event) {
         isPlaying = true;
         userWantsToPlay = true;
         playPauseBtn.textContent = '⏸';
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = "playing";
-            // Authoritative metadata sync only when actually playing
-            updateMediaSession(songs[currentSongIndex]);
+        // Skip metadata/keepalive updates during bridge to avoid competing audio
+        if (pendingKickstartIndex === null) {
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = "playing";
+                updateMediaSession(songs[currentSongIndex]);
+            }
+            startKeepAlive();
         }
-        // Resilience 12.0: Defer silence until YT is confirmed PLAYING
-        // This ensures YouTube keeps the primary Audio Focus.
-        startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
         isPlaying = false;
         playPauseBtn.textContent = '▶';
@@ -1391,8 +1391,11 @@ document.addEventListener('visibilitychange', () => {
             // Store current state and timestamp for bridge resume
             pendingResumeTime = ytPlayer.getCurrentTime() || 0;
             console.log(`Saving resume time: ${pendingResumeTime}s`);
+            // 1. Stop the original video first to prevent audio overlap
+            ytPlayer.stopVideo();
             pendingKickstartIndex = currentSongIndex;
-            ytPlayer.loadVideoById(BRIDGE_YOUTUBE_ID);
+            // 2. Load bridge starting at second 27 (of 30s) for a ~3s bridge
+            ytPlayer.loadVideoById({ videoId: BRIDGE_YOUTUBE_ID, startSeconds: 27 });
             ytPlayer.playVideo();
 
             if ('mediaSession' in navigator) {
