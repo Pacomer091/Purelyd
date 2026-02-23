@@ -196,20 +196,6 @@ function onPlayerReady(event) {
     }
 }
 
-function kickstartYouTubeVisibility() {
-    const iframe = document.getElementById('youtube-player');
-    if (!iframe) return;
-
-    // Pulse visibility to ensure render pipeline engagement
-    iframe.style.opacity = "1";
-    iframe.style.zIndex = "10001";
-    iframe.focus();
-
-    setTimeout(() => {
-        iframe.style.opacity = "0.8";
-        iframe.style.zIndex = "1000";
-    }, 4000);
-}
 
 function onPlayerError(event) {
     console.error("YouTube Player Error:", event.data);
@@ -1158,46 +1144,22 @@ function playSong(index) {
         }
         if (ytReady) {
             setStatus(`PLAYING YT: ${videoId}`);
-            kickstartYouTubeVisibility();
 
-            // Resilience 13.0: Hard State Reset
-            // 1. Scrub previous state to prevent "Sticky Timestamp" bug
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.playbackState = "none";
-                try {
-                    // Force a zero-state to bridge the gap
-                    navigator.mediaSession.setPositionState({
-                        duration: 120, // Dummy
-                        playbackRate: 0,
-                        position: 0
-                    });
-                } catch (e) { }
-            }
-            lastProgressSyncSec = -1;
-
-            // 2. Warm up web audio stack synchronously
-            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            if (audioContext.state === 'suspended') audioContext.resume();
-
-            // 3. Warm up MediaSession with REAL metadata immediately
+            // Standard Web Playback: No visiblity hacks needed
             updateMediaSession(song);
             navigator.mediaSession.playbackState = "playing";
 
-            // 4. Load YouTube (Primary Focus Hunter)
-            // Muted Autoplay Resilience: Mobile browsers/WebViews often allow autoplay 
-            // if the video starts muted. We'll unmute in onPlayerStateChange.
-            if (ytPlayer.mute) ytPlayer.mute();
             ytPlayer.loadVideoById(videoId);
-            ytPlayer.playVideo(); // Explicitly call play
+            ytPlayer.playVideo();
             userWantsToPlay = true;
-            isPlaying = false; // Defer to onPlayerStateChange
-            playPauseBtn.textContent = 'ÔÅ©';
+            isPlaying = true;
+            playPauseBtn.textContent = '⏸';
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
             userWantsToPlay = true;
             isPlaying = false;
-            playPauseBtn.textContent = 'ÔÅ©';
+            playPauseBtn.textContent = '⏸';
         }
     } else {
         setStatus("PLAYING AUDIO FILE");
@@ -1443,7 +1405,6 @@ function togglePlay() {
             ytPlayer.pauseVideo();
             userWantsToPlay = false;
         } else {
-            kickstartYouTubeVisibility();
             ytPlayer.playVideo();
             userWantsToPlay = true;
         }
