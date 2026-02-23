@@ -32,6 +32,9 @@ let editingSongId = null; // Track which song is being edited
 let isSelectMode = false;
 let selectedSongIds = [];
 let userWantsToPlay = false; // Persistent state for background bypass
+let needsGestureKickstart = true; // Workaround for Browser Autoplay restrictions
+let pendingKickstartIndex = null; // Song to play after valid gesture
+const SILENT_TRACK_FILE = "silent_keepalive.mp3";
 
 // DOM Elements
 const songGrid = document.getElementById('song-grid');
@@ -223,6 +226,12 @@ function onPlayerStateChange(event) {
 }
 
 function nextSong() {
+    if (pendingKickstartIndex !== null) {
+        const target = pendingKickstartIndex;
+        pendingKickstartIndex = null;
+        playSong(target);
+        return;
+    }
     let nextIndex = (currentSongIndex + 1) % songs.length;
     playSong(nextIndex);
 }
@@ -1109,6 +1118,37 @@ async function playSong(index) {
     if (song.type === 'youtube' || videoId) {
         if (!videoId) {
             setStatus("INVALID YOUTUBE ID");
+            return;
+        }
+
+        // Gesture Kickstart Logic (Web version)
+        if (needsGestureKickstart) {
+            needsGestureKickstart = false;
+            pendingKickstartIndex = index;
+
+            // UI Instructions
+            const bridgeTitle = "⚠️ Pulsa ⏭️ para empezar";
+            const bridgeArtist = "Sincronizando permisos de audio...";
+            document.querySelector('.player-song-info .song-name').textContent = bridgeTitle;
+            document.querySelector('.player-song-info .artist-name').textContent = bridgeArtist;
+
+            setStatus("ESPERANDO GESTO (Pulsa Siguiente)");
+
+            // Prime the audio engine with a real interaction
+            audioElement.src = SILENT_TRACK_FILE;
+            audioElement.play().catch(e => {
+                console.warn("Autoplay block detected, waiting for Next button");
+            });
+
+            // MediaSession instructions
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: bridgeTitle,
+                    artist: bridgeArtist,
+                    album: "Purelyd Web",
+                    artwork: [{ src: "https://img.icons8.com/color/512/music.png", sizes: "512x512", type: "image/png" }]
+                });
+            }
             return;
         }
         if (ytReady) {
