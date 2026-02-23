@@ -205,7 +205,7 @@ function onPlayerStateChange(event) {
     } else if (event.data === YT.PlayerState.PLAYING) {
         isPlaying = true;
         userWantsToPlay = true;
-        playPauseBtn.textContent = 'â¸';
+        playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
             // Authoritative metadata sync only when actually playing
@@ -216,7 +216,7 @@ function onPlayerStateChange(event) {
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
         isPlaying = false;
-        playPauseBtn.textContent = 'â–¶';
+        playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "paused";
             updateMediaSessionPositionState();
@@ -1154,13 +1154,13 @@ async function playSong(index) {
             ytPlayer.loadVideoById(videoId);
             userWantsToPlay = true;
             isPlaying = false; // Defer to onPlayerStateChange
-            playPauseBtn.textContent = '?';
+            playPauseBtn.textContent = '⏸';
         } else {
             setStatus("WAITING FOR YT PLAYER...");
             pendingSongId = videoId;
             userWantsToPlay = true;
             isPlaying = true;
-            playPauseBtn.textContent = '?';
+            playPauseBtn.textContent = '⏸';
         }
     } else {
         setStatus("PLAYING AUDIO FILE");
@@ -1175,7 +1175,7 @@ async function playSong(index) {
         });
         userWantsToPlay = true;
         isPlaying = false;
-        playPauseBtn.textContent = '?';
+        playPauseBtn.textContent = '⏸';
     }
 
     updateMediaSession(song);
