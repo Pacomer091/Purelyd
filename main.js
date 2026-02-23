@@ -509,6 +509,34 @@ function renderSongs() {
         };
         toggleSelectBtn.style.display = 'none';
         if (isSelectMode) exitSelectMode();
+
+        // RECOMMENDED: Show 5 random songs
+        if (songs.length > 0) {
+            const shuffled = [...songs].sort(() => Math.random() - 0.5).slice(0, 5);
+            const recoHTML = shuffled.map(song => {
+                const realIndex = songs.findIndex(s => s.id === song.id);
+                return `
+                <div class="song-card" data-index="${realIndex}" style="cursor:pointer;">
+                    <img src="${song.cover || getThumbnail(song)}" alt="${song.title}">
+                    <div class="title">${song.title}</div>
+                    <div class="artist">${song.artist}</div>
+                </div>`;
+            }).join('');
+            songGrid.innerHTML += `
+                <div style="grid-column: 1 / -1; margin-top: 20px;">
+                    <h2 style="color: white; font-size: 1.3rem; margin-bottom: 12px;">🎧 Recomendados</h2>
+                </div>
+                ${recoHTML}
+            `;
+            // Attach click to recommended cards
+            songGrid.querySelectorAll('.song-card[data-index]').forEach(card => {
+                card.onclick = () => {
+                    const index = parseInt(card.dataset.index);
+                    playSong(index);
+                };
+            });
+        }
+
         return;
     }
 
