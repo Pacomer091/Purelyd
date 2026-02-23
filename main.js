@@ -222,7 +222,7 @@ function onPlayerStateChange(event) {
     } else if (event.data === YT.PlayerState.PLAYING) {
         isPlaying = true;
         userWantsToPlay = true;
-        playPauseBtn.textContent = 'ÔÅ©';
+        playPauseBtn.textContent = '⏸';
 
         // Resilience 14.0: Restore Volume strictly after confirmed playback
         if (ytPlayer.unMute) ytPlayer.unMute();
@@ -238,7 +238,7 @@ function onPlayerStateChange(event) {
         startKeepAlive();
     } else if (event.data === YT.PlayerState.PAUSED) {
         isPlaying = false;
-        playPauseBtn.textContent = 'ÔûÂ';
+        playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "paused";
             updateMediaSessionPositionState();
@@ -326,12 +326,12 @@ async function migrateToCloud() {
                     await SongDB.addSong(song, song.username || 'invitado');
                     count++;
                 } catch (err) {
-                    console.error("Error migrando canci├│n:", song.title, err);
+                    console.error("Error migrando canción:", song.title, err);
                 }
             }
 
             localStorage.setItem('purelyd-cloud-migrated', 'true');
-            alert(`┬íMigraci├│n completada! Se han subido ${count} canciones a la nube.`);
+            alert(`¡Migración completada! Se han subido ${count} canciones a la nube.`);
             window.location.reload(); // Reload to show new data
         };
     } catch (e) {
@@ -433,7 +433,7 @@ function renderSongs() {
     const mainHeading = document.querySelector('.content-area h1');
     if (mainHeading) {
         if (currentPlaylistId === 'favorites') mainHeading.textContent = 'My Favorites';
-        else if (currentPlaylistId === 'uploads') mainHeading.textContent = 'Subido por m├¡';
+        else if (currentPlaylistId === 'uploads') mainHeading.textContent = 'Subido por mí';
         else if (currentPlaylistId) {
             const p = playlists.find(p => p.id === currentPlaylistId);
             mainHeading.textContent = p ? p.name : 'Playlist';
@@ -586,14 +586,14 @@ function setupEventListeners() {
         // show a specific playlist view or just notify the user.
         // For now, let's just close the overlay and maybe scroll to the top
         // or toggle the sidebar if it still exists (it's hidden in CSS though).
-        // Best approach: If we had a 'Playlists' view, load it.
+        // Best approach: If we Añadir a Playlists' view, load it.
         // Since playlists are in the sidebar, let's just alert for now or
         // implement a quick way to see them.
         mobileLibOverlay.classList.remove('active');
         // Let's assume the user wants to see the list of playlists.
         // Since we don't have a dedicated 'Playlists' main view yet,
         // maybe we should create one. But for now, let's just close.
-        alert("┬íAccede a tus playlists desde el men├║ lateral en escritorio!");
+        alert("¡Accede a tus playlists desde el menú lateral en escritorio!");
     };
 
     // Close overlays when clicking close or outside (the overlay itself is the backdrop)
@@ -643,7 +643,7 @@ function setupEventListeners() {
     };
 
     newPlaylistBtn.onclick = () => {
-        if (!currentUser) return alert('Debes iniciar sesi├│n para crear playlists.');
+        if (!currentUser) return alert('Debes iniciar sesión para crear playlists.');
         playlistModal.style.display = 'flex';
     };
 
@@ -697,7 +697,7 @@ function setupEventListeners() {
         document.querySelectorAll('.selector-item').forEach(item => {
             item.onclick = async () => {
                 await PlaylistDB.addSongToPlaylist(parseInt(item.dataset.id), songId);
-                alert('Canci├│n a├▒adida!');
+                alert('Canción añadida!');
                 addToPlaylistModal.style.display = 'none';
             };
         });
@@ -768,10 +768,10 @@ function setupEventListeners() {
                     lines = videoIds.map(id => `https://www.youtube.com/watch?v=${id}`);
                     console.log(`Extraction successful: ${lines.length} songs found.`);
                 } else {
-                    throw new Error("No se encontraron v├¡deos en la playlist.");
+                    throw new Error("No se encontraron vídios en la playlist.");
                 }
             } catch (e) {
-                alert("Error al extraer la playlist. Intenta pegar los enlaces de los v├¡deos directamente.");
+                alert("Error al extraer la playlist. Intenta pegar los enlaces de los vídios directamente.");
                 console.error("Playlist extraction error:", e);
                 startBulkImportBtn.disabled = false;
                 return;
@@ -807,7 +807,7 @@ function setupEventListeners() {
             }
         }
 
-        alert(`┬íImportaci├│n completada! Se a├▒adieron ${importedCount} canciones.`);
+        alert(`¡Importación completada! Se añadieron ${importedCount} canciones.`);
         startBulkImportBtn.disabled = false;
         bulkImportModal.style.display = 'none';
         await loadUserSongs();
@@ -907,7 +907,7 @@ function setupEventListeners() {
 
         if (isRegisterMode) {
             if (password !== confirmPassword) {
-                return alert('Las contrase├▒as no coinciden.');
+                return alert('Las contraseñas no coinciden.');
             }
             if (await UserDB.getUser(username)) {
                 return alert('Ese nombre de usuario ya existe.');
@@ -926,7 +926,7 @@ function setupEventListeners() {
             const user = await UserDB.getUser(username);
             if (!user || user.password !== password) {
                 console.warn("Invalid credentials");
-                return alert('Usuario o contrase├▒a incorrectos.');
+                return alert('Usuario o contraseña incorrectos.');
             }
             currentUser = user;
             localStorage.setItem('purelyd-current-user', JSON.stringify(currentUser));
@@ -955,7 +955,7 @@ function setupEventListeners() {
                     selectedGenres.push(genre);
                     chip.classList.add('selected');
                 } else {
-                    alert('Solo puedes elegir hasta 3 g├®neros.');
+                    alert('Solo puedes elegir hasta 3 géneros.');
                 }
             };
         });
@@ -965,7 +965,7 @@ function setupEventListeners() {
 
     saveGenresBtn.onclick = async () => {
         if (selectedGenres.length === 0) {
-            return alert('Por favor, elige al menos un g├®nero.');
+            return alert('Por favor, elige al menos un género.');
         }
 
         currentUser.genres = selectedGenres;
@@ -1086,7 +1086,7 @@ function setupEventListeners() {
     audioElement.onplay = () => {
         isPlaying = true;
         userWantsToPlay = true;
-        playPauseBtn.textContent = 'ÔÅ©';
+        playPauseBtn.textContent = '⏸';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "playing";
             updateMediaSessionPositionState();
@@ -1096,7 +1096,7 @@ function setupEventListeners() {
 
     audioElement.onpause = () => {
         isPlaying = false;
-        playPauseBtn.textContent = 'ÔûÂ';
+        playPauseBtn.textContent = '▶';
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = "paused";
             updateMediaSessionPositionState();
@@ -1111,10 +1111,10 @@ function setupEventListeners() {
 // Utility to export all songs for GitHub deployment
 async function exportAllSongs() {
     const allSongs = await SongDB.getAllSongs();
-    console.log("--- COPIA ESTO Y P├üSAMELO ---");
+    console.log("--- Copia esto y pásamelo ---");
     console.log(JSON.stringify(allSongs, null, 2));
     console.log("-------------------------------");
-    alert("Lista de canciones exportada a la consola (F12). C├│piamela para incluirla en el despliegue.");
+    alert("Lista de canciones exportada a la consola (F12). Pásamela para incluirla en el despliegue.");
 }
 
 function playSong(index) {
@@ -1174,7 +1174,7 @@ function playSong(index) {
         });
         userWantsToPlay = true;
         isPlaying = false;
-        playPauseBtn.textContent = 'ÔÅ©';
+        playPauseBtn.textContent = '⏸';
     }
 
     updateMediaSession(song);
@@ -1476,7 +1476,7 @@ function showMenu(event, index) {
     // Update Favorite text dynamically
     if (currentUser && songs[index]) {
         const isFav = (currentUser.favorites || []).includes(songs[index].id);
-        menuFavorite.textContent = isFav ? "Quitar de Favoritos" : "A├▒adir a Favoritos";
+        menuFavorite.textContent = isFav ? "Quitar de Favoritos" : "Añadir a Favoritos";
     }
 
     // Calculate position
@@ -1498,7 +1498,7 @@ function hideMenu() {
 }
 
 async function deleteSongById(id) {
-    if (confirm(`┬┐Seguro que quieres eliminar esta canci├│n?`)) {
+    if (confirm(`¿Seguro que quieres eliminar esta canción?`)) {
         await SongDB.deleteSong(id);
         await loadUserSongs();
         renderSongs();
@@ -1514,7 +1514,7 @@ function openEditModal(index) {
     document.getElementById('song-url').value = song.url;
     document.getElementById('song-cover').value = song.cover || '';
 
-    document.querySelector('#add-song-modal h2').textContent = 'Editar Canci├│n';
+    document.querySelector('#add-song-modal h2').textContent = 'Editar Canción';
     addSongModal.style.display = 'flex';
 }
 
@@ -1545,7 +1545,7 @@ function toggleSelectMode() {
         toggleSelectBtn.textContent = 'Seleccionar';
     } else {
         multiActionBar.style.display = 'flex';
-        toggleSelectBtn.textContent = 'Salir Selecci├│n';
+        toggleSelectBtn.textContent = 'Salir Selección';
         updateMultiBar();
     }
     renderSongs();
@@ -1576,7 +1576,7 @@ function updateMultiBar() {
 
 async function bulkDelete() {
     if (selectedSongIds.length === 0) return;
-    if (!confirm(`┬┐Est├ís seguro de que quieres eliminar ${selectedSongIds.length} canciones?`)) return;
+    if (!confirm(`¿Estás seguro de que quieres eliminar ${selectedSongIds.length} canciones?`)) return;
 
     for (const id of selectedSongIds) {
         await SongDB.deleteSong(id);
@@ -1618,7 +1618,7 @@ async function bulkAddToPlaylist() {
             for (const sid of selectedSongIds) {
                 await PlaylistDB.addSongToPlaylist(pid, sid);
             }
-            alert('Canciones a├▒adidas a la playlist!');
+            alert('Canciones añadidas a la playlist!');
             addToPlaylistModal.style.display = 'none';
             exitSelectMode();
         };
