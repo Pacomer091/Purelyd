@@ -35,7 +35,7 @@ let userWantsToPlay = false; // Persistent state for background bypass
 let pendingKickstartIndex = null;
 let keepAliveOsc = null;
 const SILENT_TRACK_FILE = "silent_keepalive.mp3";
-const BRIDGE_YOUTUBE_ID = "KgUo_fR73yY";
+const BRIDGE_YOUTUBE_ID = "M6ebXdNyLnY";
 
 // DOM Elements
 const songGrid = document.getElementById('song-grid');
@@ -1361,7 +1361,7 @@ document.addEventListener('visibilitychange', () => {
             ytPlayer.playVideo();
 
             if ('mediaSession' in navigator) {
-                const bridgeTitle = String.fromCodePoint(0x25B6) + " / " + String.fromCodePoint(0x23ED) + " PULSA PLAY PARA RESUMIR";
+                const bridgeTitle = "Cargando...";
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: bridgeTitle,
                     artist: "Sincronizando modo segundo plano...",
