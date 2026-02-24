@@ -16,7 +16,10 @@ let playlists = [];
 let currentPlaylistId = null; // null means 'Home' or 'Library'
 let searchTerm = '';
 let youtubeResults = [];
+let trendingResults = [];
 let isSearchingYT = false;
+let isFetchingTrending = false;
+let currentView = 'home'; // 'home', 'trending', 'favorites', 'uploads', 'playlist'
 let searchTimeout = null;
 const SYSTEM_BOT = 'PurelydBot';
 const WORKER_URL = 'https://purelyd.2008qlfta.workers.dev';
@@ -454,6 +457,7 @@ function renderSongs() {
     if (mainHeading) {
         if (currentPlaylistId === 'favorites') mainHeading.textContent = 'Mis Favoritos';
         else if (currentPlaylistId === 'uploads') mainHeading.textContent = 'Subido por mí';
+        else if (currentView === 'trending') mainHeading.textContent = 'Tendencias y Éxitos 📊';
         else if (currentPlaylistId) {
             const p = playlists.find(p => p.id === currentPlaylistId);
             mainHeading.textContent = p ? p.name : 'Playlist';
@@ -462,8 +466,66 @@ function renderSongs() {
         }
     }
 
+    // TRENDING VIEW
+    if (currentView === 'trending' && !searchTerm) {
+        if (isFetchingTrending) {
+            songGrid.innerHTML = `
+                <div style="grid-column: 1 / -1; padding: 50px; text-align: center; color: #888;">
+                    <div class="spinner" style="width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.1); border-top-color: #ff0033; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px;"></div>
+                    Cargando éxitos del momento...
+                </div>
+            `;
+            return;
+        }
+
+        if (trendingResults.length === 0) {
+            songGrid.innerHTML = `
+                <div style="grid-column: 1 / -1; padding: 50px; text-align: center; color: #888;">
+                    No se han podido cargar las tendencias. Inténtalo de nuevo más tarde.
+                </div>
+            `;
+            return;
+        }
+
+        songGrid.innerHTML = `
+            <div style="grid-column: 1 / -1; margin-bottom: 20px;">
+                <p style="color: #888; font-size: 0.9rem;">Estas son las canciones más populares hoy en YouTube Music. ¡Escucha y agrégalas a tu colección!</p>
+            </div>
+        ` + trendingResults.map((song, idx) => `
+            <div class="song-card trending-card" data-trending-index="${idx}" style="cursor:pointer; position: relative;">
+                <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold; z-index: 1;">#${idx + 1}</div>
+                <img src="${song.cover}" alt="${song.title}">
+                <div class="song-info">
+                    <div class="song-title">${song.title}</div>
+                    <div class="song-artist">${song.artist}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // Attach clicks for trending cards
+        document.querySelectorAll('.trending-card').forEach(card => {
+            card.onclick = async () => {
+                const idx = parseInt(card.dataset.trendingIndex);
+                const songData = trendingResults[idx];
+
+                // Play and auto-index
+                const song = await SongDB.addSong({
+                    ...songData,
+                    username: currentUser ? currentUser.username : SYSTEM_BOT
+                });
+
+                // Since it's a new song potentially, we want to play it immediately
+                // We'll add it to the temporary songs array to use the existing playSong logic
+                songs = [song, ...songs];
+                renderSongs();
+                playSong(0);
+            };
+        });
+        return;
+    }
+
     // HOME VIEW: Show action cards instead of all songs
-    if (!currentPlaylistId && !searchTerm) {
+    if (currentView === 'home' && !currentPlaylistId && !searchTerm) {
         const playlistCards = playlists.map(p => `
             <div class="song-card home-action-card home-playlist-card" data-playlist-id="${p.id}" style="cursor:pointer;">
                 <div class="song-cover" style="background: linear-gradient(135deg, #6C3483, #A569BD); display:flex; align-items:center; justify-content:center; font-size:2.5rem;">🎵</div>
@@ -850,10 +912,59 @@ function setupEventListeners() {
     // Mobile Bottom Nav Handlers
     mobileNavHome.onclick = () => {
         currentPlaylistId = null;
+        currentView = 'home';
         loadUserSongs();
         renderSongs();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
+
+    const navTrending = document.getElementById('nav-trending');
+    const mobNavTrending = document.getElementById('mob-nav-trending');
+
+    const handleTrendingClick = async (e) => {
+        if (e) e.preventDefault();
+        currentView = 'trending';
+        currentPlaylistId = null;
+
+        // UI feedback
+        navHome.classList.remove('active');
+        if (navTrending) navTrending.classList.add('active');
+        navUploads.classList.remove('active');
+        navFavorites.classList.remove('active');
+
+        await fetchTrending();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    if (navTrending) navTrending.onclick = handleTrendingClick;
+    if (mobNavTrending) mobNavTrending.onclick = (e) => {
+        handleTrendingClick(e);
+        mobileLibOverlay.classList.remove('active');
+    };
+
+    async function fetchTrending() {
+        if (trendingResults.length > 0) {
+            renderSongs(); // Already have them
+            return;
+        }
+        isFetchingTrending = true;
+        renderSongs();
+
+        try {
+            const res = await fetch(`${WORKER_URL}/trending`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    trendingResults = data.results;
+                }
+            }
+        } catch (e) {
+            console.error("Failed to fetch trending:", e);
+        } finally {
+            isFetchingTrending = false;
+            renderSongs();
+        }
+    }
 
     mobileNavAdd.onclick = () => {
         mobileAddOverlay.classList.toggle('active');
@@ -950,7 +1061,9 @@ function setupEventListeners() {
     navHome.onclick = async (e) => {
         if (e) e.preventDefault();
         currentPlaylistId = null;
+        currentView = 'home';
         navHome.classList.add('active');
+        if (navTrending) navTrending.classList.remove('active');
         navUploads.classList.remove('active');
         navFavorites.classList.remove('active');
         await loadUserSongs();
@@ -962,8 +1075,10 @@ function setupEventListeners() {
         e.preventDefault();
         if (!currentUser) return showAuthModal();
         currentPlaylistId = 'uploads';
+        currentView = 'uploads';
         navUploads.classList.add('active');
         navHome.classList.remove('active');
+        if (navTrending) navTrending.classList.remove('active');
         navFavorites.classList.remove('active');
         await loadUserSongs();
         renderSongs();
@@ -974,8 +1089,10 @@ function setupEventListeners() {
         e.preventDefault();
         if (!currentUser) return showAuthModal();
         currentPlaylistId = 'favorites';
+        currentView = 'favorites';
         navFavorites.classList.add('active');
         navHome.classList.remove('active');
+        if (navTrending) navTrending.classList.remove('active');
         navUploads.classList.remove('active');
         await loadUserSongs();
         renderSongs();
