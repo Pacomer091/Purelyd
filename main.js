@@ -781,7 +781,7 @@ function setupEventListeners() {
         renderSongs();
 
         // 1. Try Worker Search first (if URL is set)
-        const WORKER_URL = ''; // Coloca aquí tu URL de Cloudflare si la tienes
+        const WORKER_URL = 'https://purelyd.2008qlfta.workers.dev'; // Coloca aquí tu URL de Cloudflare si la tienes
         if (WORKER_URL) {
             try {
                 const res = await fetch(`${WORKER_URL}/search?q=${encodeURIComponent(query)}`);
