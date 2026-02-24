@@ -497,17 +497,19 @@ function renderSongs() {
 
         // Build recommended section HTML
         let recoSection = "";
+        let recommendedSongs = [];
         const userSongs = currentUser ? songs.filter(s => s.username === currentUser.username) : [];
         if (userSongs.length > 0) {
             const shuffled = [...userSongs].sort(() => Math.random() - 0.5).slice(0, 5);
+            recommendedSongs = shuffled;
             recoSection = `
                 <div style="grid-column: 1 / -1; margin-top: 20px;">
                     <h2 style="color: white; font-size: 1.3rem; margin-bottom: 12px;">&#127911; Recomendados</h2>
                 </div>
-            ` + shuffled.map(song => {
+            ` + shuffled.map((song, idx) => {
                 const realIndex = songs.findIndex(s => s.id === song.id);
                 return `
-                <div class="song-card reco-card" data-index="${realIndex}" style="cursor:pointer;">
+                <div class="song-card reco-card" data-reco-index="${idx}" style="cursor:pointer;">
                     <img src="${song.cover || getThumbnail(song)}" alt="${song.title}">
                     <div class="title">${song.title}</div>
                     <div class="artist">${song.artist}</div>
@@ -546,13 +548,33 @@ function renderSongs() {
         };
         songGrid.querySelectorAll(".reco-card").forEach(card => {
             card.onclick = async () => {
-                const origIndex = parseInt(card.dataset.index);
-                const songId = songs[origIndex]?.id;
+                const recoIdx = parseInt(card.dataset.recoIndex);
+                const clickedSong = recommendedSongs[recoIdx];
+                if (!clickedSong) return;
+
+                // 1. Load all user uploads to build the background queue
                 currentPlaylistId = "uploads";
-                await loadUserSongs();
+                await loadUserSongs(); // Updates global 'songs' with all user songs
+
+                // 2. Filter out the recommended songs from the rest of uploads
+                const recoIds = recommendedSongs.map(s => s.id);
+                const restOfSongs = songs.filter(s => !recoIds.includes(s.id));
+
+                // 3. Build the specific queue: [clicked, ...rest_of_recommended, ...rest_of_uploads]
+                const remainingRecommended = recommendedSongs.slice(recoIdx + 1);
+                const precedingRecommended = recommendedSongs.slice(0, recoIdx);
+
+                // Re-assemble: clicked + those after it + those before it + rest
+                // Wait, user said "se reproduzcan las siguientes recomendadas y despues se pase a las subidas"
+                // If I click the 2nd, I play 2nd, 3rd, 4th, 5th, then the rest.
+                // What about 1st? Maybe the rest should include 1st? 
+                // Let's stick to the literal "following ones" then the rest.
+
+                songs = [clickedSong, ...remainingRecommended, ...precedingRecommended, ...restOfSongs];
+
+                // 4. Trigger UI update to Uploads view and play first song
                 renderSongs();
-                const newIndex = songs.findIndex(s => s.id === songId);
-                if (newIndex >= 0) playSong(newIndex);
+                playSong(0);
             };
         });
         toggleSelectBtn.style.display = "none";
