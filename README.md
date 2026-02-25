@@ -37,12 +37,6 @@ Purelyd prioriza una experiencia **visual-first**. La interfaz está diseñada p
 
 ---
 
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT; consulta el archivo [LICENSE](LICENSE) para más detalles.
-
----
-
 <p align="center">
-  Hecho con ❤️ por el equipo de Purelyd.
+  Hecho con ❤️ 
 </p>
